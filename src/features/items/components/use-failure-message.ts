@@ -1,6 +1,6 @@
 import { useTranslations } from "next-intl";
 import type * as actions from "../actions";
-import type { FieldCode } from "../input";
+import { type FieldCode, TITLE_MAX } from "../input";
 
 type Result = Awaited<ReturnType<(typeof actions)[keyof typeof actions]>>;
 
@@ -15,5 +15,6 @@ export function useFailureMessage(): (failure: Failure) => string {
 
 export function useFieldMessage(): (code: FieldCode) => string {
   const t = useTranslations("items.fields");
-  return (code) => t(code);
+  // only too_long names the limit; the others take no value
+  return (code) => t(code, { max: TITLE_MAX });
 }

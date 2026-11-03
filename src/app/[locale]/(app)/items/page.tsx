@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // The viewer's items, newest first, a page at a time: ?cursor= is the previous page's nextCursor, and a cursor this app
-// did not make is a page that does not exist.
+// did not make is a page that does not exist. The form to add one is on the first page only, where a new item shows.
 export default async function ItemsPage({
   searchParams,
 }: {
@@ -31,13 +31,17 @@ export default async function ItemsPage({
         <p className="text-muted">{t("intro")}</p>
       </div>
 
-      <section className="card flex flex-col gap-4">
-        <h2 className="font-medium text-lg">{t("newItem")}</h2>
-        <ItemForm />
-      </section>
+      {cursor === undefined && (
+        <section className="card flex flex-col gap-4">
+          <h2 className="font-medium text-lg">{t("newItem")}</h2>
+          <ItemForm />
+        </section>
+      )}
 
       {page.items.length === 0 ? (
-        <p className="text-muted">{t("empty")}</p>
+        <p className="text-muted">
+          {t(cursor === undefined ? "empty" : "noOlder")}
+        </p>
       ) : (
         <ul className="flex flex-col divide-y divide-border rounded-2xl border border-border">
           {page.items.map((item) => (

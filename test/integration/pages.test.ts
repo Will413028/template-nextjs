@@ -213,6 +213,46 @@ describe("the items pages", () => {
     expect(still.html).toContain(title);
   });
 
+  // React resets a form's fields after its action: a refused form gets back what it sent, to show it again
+  it("give a refused form back what it sent, and change nothing", async () => {
+    const user = await signedIn();
+    const long = "a".repeat(201);
+    expect(
+      await user.submit(
+        "createItem",
+        { title: long, description: "kept" },
+        "/en/items",
+      ),
+    ).toEqual({
+      ok: false,
+      code: "invalid_input",
+      fields: { title: "too_long" },
+      sent: { title: long, description: "kept" },
+    });
+    const id = createdId(
+      await user.submit(
+        "createItem",
+        { title: "saved", description: "" },
+        "/en/items",
+      ),
+    );
+    expect(
+      await user.submit(
+        "updateItem",
+        { id, title: long, description: "changed" },
+        `/en/items/${id}`,
+      ),
+    ).toMatchObject({
+      ok: false,
+      code: "invalid_input",
+      sent: { title: long, description: "changed" },
+    });
+    const list = await user.get("/en/items");
+    expect(list.html).toContain("saved");
+    expect(list.html).not.toContain("kept");
+    expect(list.html).not.toContain("changed");
+  });
+
   it.each(["/en/items/42", "/en/items?cursor=not-a-cursor"])(
     "answers %s with not found",
     async (path) => {
@@ -237,6 +277,13 @@ describe("the items pages", () => {
     const first = await user.get("/en/items");
     expect(first.html).toContain("item-20");
     expect(first.html).not.toContain("item-00");
+    // matched as elements: the client gets the whole catalog, so a bare message text is on every page
+    const firstPageLink = new RegExp(
+      `<a[^>]*href="/en/items"[^>]*>${en.items.firstPage}</a>`,
+    );
+    const addForm = new RegExp(`>${en.items.newItem}</h2>`);
+    expect(first.html).toMatch(addForm);
+    expect(first.html).not.toMatch(firstPageLink);
     const next = /href="(\/en\/items\?cursor=[A-Za-z0-9_-]+)"/.exec(
       first.html,
     )?.[1];
@@ -245,7 +292,9 @@ describe("the items pages", () => {
     expect(second.status).toBe(200);
     expect(second.html).toContain("item-00");
     expect(second.html).not.toContain("item-01");
-    expect(second.html).toContain('href="/en/items"');
+    // the link back to the newest, and no form to add one where it would not show
+    expect(second.html).toMatch(firstPageLink);
+    expect(second.html).not.toMatch(addForm);
   });
 
   it("sends a visitor without a session to sign in", async () => {

@@ -12,7 +12,11 @@ type State = Awaited<ReturnType<typeof createItem | typeof updateItem>> | null;
 type Editing = { id: string; title: string; description: string | null };
 
 // Adds an item, or, given one, changes it. After adding, the list reloads and React empties the form; after a change,
-// the list opens. What the action says is wrong shows next to the field it names, or above the button.
+// the list opens. What the action says is wrong shows next to the field it names, or above the button, and the
+// fields keep what was sent: React resets them to their defaults after the action, so a refused form's defaults are
+// what it sent (actions.ts keepSent), and a successful add's are empty. Either order of React's reset and its new
+// defaults ends there: a field reset and not typed in since shows its default as it changes (HTML's dirty flag). The
+// defaults are always strings, so a textarea's is never left behind.
 export function ItemForm({ item }: { item?: Editing }) {
   const t = useTranslations("items");
   const failureMessage = useFailureMessage();
@@ -35,6 +39,7 @@ export function ItemForm({ item }: { item?: Editing }) {
   const failure = state && !state.ok ? state : null;
   const fields = failure && "fields" in failure ? failure.fields : undefined;
   const shownByField = Boolean(fields?.title || fields?.description);
+  const sent = failure && "sent" in failure ? failure.sent : undefined;
 
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -43,7 +48,7 @@ export function ItemForm({ item }: { item?: Editing }) {
         name="title"
         label={t("titleLabel")}
         error={fields?.title}
-        defaultValue={item?.title}
+        defaultValue={sent?.title ?? item?.title ?? ""}
         required
       />
       <Field
@@ -51,7 +56,7 @@ export function ItemForm({ item }: { item?: Editing }) {
         label={t("descriptionLabel")}
         hint={t("descriptionHint")}
         error={fields?.description}
-        defaultValue={item?.description ?? undefined}
+        defaultValue={sent?.description ?? item?.description ?? ""}
         multiline
       />
       {failure && !shownByField && (

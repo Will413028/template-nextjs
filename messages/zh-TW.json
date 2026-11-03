@@ -60,7 +60,7 @@
     "items": "項目",
     "settings": "設定",
     "welcome": "歡迎，{username}",
-    "intro": "這是你帳號的首頁。在總覽與設定旁邊加上你自己的頁面。",
+    "intro": "這是你帳號的首頁。「項目」是範例頁面，你自己的頁面可以加在它旁邊。",
     "devices": "登入中的裝置",
     "manageDevices": "到設定查看並登出。"
   },
@@ -92,6 +92,7 @@
     "delete": "刪除項目",
     "deleteDescription": "永久刪除這個項目。",
     "empty": "還沒有項目，從上面新增第一個。",
+    "noOlder": "沒有更舊的項目。",
     "updatedAt": "更新於 {at}",
     "pagination": "分頁",
     "nextPage": "較舊的項目",
@@ -104,7 +105,7 @@
     "fields": {
       "required": "必填。",
       "too_short": "必填。",
-      "too_long": "太長：最多 200 個字。",
+      "too_long": "太長：最多 {max} 個字。",
       "null_not_allowed": "必填。",
       "out_of_range": "超出範圍。",
       "invalid": "不正確。"

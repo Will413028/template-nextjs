@@ -60,7 +60,7 @@
     "items": "Items",
     "settings": "Settings",
     "welcome": "Welcome, {username}",
-    "intro": "Your account's home. Add your own pages next to Overview and Settings.",
+    "intro": "Your account's home. Items is an example page; add your own next to it.",
     "devices": "Signed-in devices",
     "manageDevices": "Review and sign them out in Settings."
   },
@@ -92,6 +92,7 @@
     "delete": "Delete item",
     "deleteDescription": "Deletes this item for good.",
     "empty": "No items yet. Add your first one above.",
+    "noOlder": "No older items.",
     "updatedAt": "Updated {at}",
     "pagination": "Pages",
     "nextPage": "Older items",
@@ -104,7 +105,7 @@
     "fields": {
       "required": "Required.",
       "too_short": "Required.",
-      "too_long": "Too long: at most 200 characters.",
+      "too_long": "Too long: at most {max} characters.",
       "null_not_allowed": "Required.",
       "out_of_range": "Out of range.",
       "invalid": "Invalid."

@@ -5,7 +5,7 @@ import { z } from "zod";
 // Cursor). Titles count code points; items_title_check in schema.ts is the database's copy of the title rule. A
 // description has no limit of its own, as in Go: the Server Action body limit bounds it.
 
-const TITLE_MAX = 200;
+export const TITLE_MAX = 200;
 // Items per page when the caller names no limit, and the most it may name.
 export const PAGE_SIZE = 20;
 const PAGE_SIZE_MAX = 100;
@@ -33,12 +33,19 @@ const typeError = (issue: { input?: unknown }): FieldCode =>
       ? "null_not_allowed"
       : "invalid";
 
+// PostgreSQL text cannot hold U+0000: refused here, or the insert would throw instead of naming the field.
+const storable = (s: string) => !s.includes("\u0000");
+
 const title = z
   .string({ error: typeError })
   .refine((s) => codePoints(s) >= 1, { message: "too_short" })
-  .refine((s) => codePoints(s) <= TITLE_MAX, { message: "too_long" });
+  .refine((s) => codePoints(s) <= TITLE_MAX, { message: "too_long" })
+  .refine(storable, { message: "invalid" });
 
-const description = z.string({ error: () => "invalid" }).nullable();
+const description = z
+  .string({ error: () => "invalid" })
+  .refine(storable, { message: "invalid" })
+  .nullable();
 
 const newItem = z.object({ title, description: description.optional() });
 const itemPatch = z.object({

@@ -35,6 +35,17 @@ describe("a new item", () => {
       { description: "invalid" },
     ],
     ["no object at all", "title", { title: "required" }],
+    // PostgreSQL text cannot store U+0000
+    [
+      "a title with a NUL character",
+      { title: "a\u0000b" },
+      { title: "invalid" },
+    ],
+    [
+      "a description with a NUL character",
+      { title: "x", description: "a\u0000b" },
+      { description: "invalid" },
+    ],
   ])("refuses %s", (_, input, fields) => {
     expect(parseNewItem(input)).toEqual({ ok: false, fields });
   });

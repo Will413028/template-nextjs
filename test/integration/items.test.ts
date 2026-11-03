@@ -137,6 +137,21 @@ describe("creating an item", () => {
   });
 });
 
+describe("text PostgreSQL cannot hold", () => {
+  // PostgreSQL text refuses U+0000 (SQLSTATE 22021): the rules name the field instead of the insert throwing
+  it("is refused as invalid in a title or a description, not passed to the database", async () => {
+    const alice = await signUp();
+    expect(await items.create(alice, { title: "a\u0000b" })).toEqual(
+      invalid({ title: "invalid" }),
+    );
+    const item = await create(alice, "fine");
+    expect(
+      await items.update(alice, item.id, { description: "a\u0000b" }),
+    ).toEqual(invalid({ description: "invalid" }));
+    expect(await items.get(alice, item.id)).toEqual(item);
+  });
+});
+
 describe("listing items", () => {
   it("shows only the viewer's, newest first, with no next cursor on the only page", async () => {
     const alice = await signUp();
