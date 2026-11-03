@@ -4,7 +4,7 @@ pre-commit:
     prevent-env-leak:
       tags: security
       run: >-
-        git diff --cached --name-only | grep -E '^(\.env|\.secrets/.*)$' &&
+        git diff --cached --name-only | grep -E '^(\.env(\..*)?|\.secrets/.*)$' | grep -vx '.env-example' &&
         echo "Error: .env and .secrets/ hold credentials and are never committed." &&
         exit 1 || exit 0
     lint:
@@ -17,19 +17,25 @@ pre-commit:
       run: pnpm exec tsc --noEmit
       priority: 2
 
-# CI's checks, minus the compose stack job (it builds every image): a push is stopped here even when CI has not run
-# yet. The security tools are local binaries (brew install actionlint zizmor gitleaks osv-scanner).
+# CI's checks, minus the jobs that start containers (integration tests, compose stack) and the rename smoke test:
+# a push is stopped here even when CI has not run yet. The security tools are local binaries (brew install actionlint zizmor gitleaks osv-scanner).
 pre-push:
   parallel: true
   commands:
     app:
       run: pnpm audit --prod --audit-level high && pnpm check
+    # before the first push there is no origin/main: nothing has been released, so there is nothing to compare
     migrations-immutable:
-      run: python3 scripts/check_migrations.py --base origin/main
+      run: >-
+        if git rev-parse -q --verify origin/main > /dev/null; then python3 scripts/check_migrations.py --base origin/main;
+        else python3 scripts/check_migrations.py; fi
     docker-lint:
       run: make --no-print-directory lint-docker
     policy:
-      run: python3 -m unittest discover -s scripts -p 'test_*.py' && python3 scripts/check_commit_policy.py --range origin/main..HEAD
+      run: >-
+        python3 -m unittest discover -s scripts -p 'test_*.py' &&
+        if git rev-parse -q --verify origin/main > /dev/null; then range=origin/main..HEAD; else range=HEAD; fi &&
+        python3 scripts/check_commit_policy.py --range "$range"
     # osv-scanner gets each tracked lockfile by name: its recursive walk honours a parent repository's .gitignore,
     # so a clone nested in an ignored directory would scan nothing and fail. The step 0 spike lockfiles under
     # docs/plans/ are a frozen record that nothing installs, so they are not scanned.

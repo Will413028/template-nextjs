@@ -3,6 +3,8 @@ AGENTS.local.md
 
 # Local configuration and password files (make init-env)
 .env
+.env.*
+!.env-example
 .secrets/
 # Throwaway passwords the step 0 spikes generated
 docs/plans/**/secrets/
