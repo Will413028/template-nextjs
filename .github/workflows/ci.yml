@@ -88,13 +88,22 @@ jobs:
           runtime: node@26
           cache: true
           require-lockfile: true
-      - run: make rename NAME=ci-probe
+      # A repository other than the default (Will413028/<NAME>): with the default, a rename that skipped the
+      # repository link would still produce the right one, so nothing could tell.
+      - run: make rename NAME=ci-probe REPO=ci-owner/ci-probe-repo
+      # --untracked: a file the rename creates is not in the index yet
       - name: No file outside the plans still names the template
         run: |
-          if git grep -n -i -E 'template[-_]nextjs' -- ':!docs/plans/**'; then
+          if git grep --untracked -n -i -E 'template[-_]nextjs' -- ':!docs/plans/**'; then
             echo "files above still name the template; update scripts/rename.py"; exit 1
           fi
-      - run: pnpm lint
+      - name: The repository links point to the given repository
+        run: |
+          for file in SECURITY.md README.md; do
+            grep -F 'github.com/ci-owner/ci-probe-repo' "$file" || { echo "$file does not link to ci-owner/ci-probe-repo"; exit 1; }
+          done
+      # lint, dependency rules, migration checks, unit tests, locks and the production build of the renamed project
+      - run: pnpm check
 
   # Builds the production images, applies migrations with the migrate image, and checks the stack through caddy.
   stack:
