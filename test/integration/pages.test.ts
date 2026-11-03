@@ -16,15 +16,17 @@ import {
 let database: TestDatabase;
 let server: NextServer;
 
+const env = () => ({
+  DATABASE_URL: database.url(APP),
+  DATABASE_PASSWORD_FILE: database.appPasswordFile,
+  TRUSTED_PROXIES: "",
+  AUTH_RATE_LIMIT_PER_MIN: "1000",
+});
+
 beforeAll(async () => {
   database = await startDatabase();
   await migrateAsOwner(database);
-  server = await startNext({
-    DATABASE_URL: database.url(APP),
-    DATABASE_PASSWORD_FILE: database.appPasswordFile,
-    TRUSTED_PROXIES: "",
-    AUTH_RATE_LIMIT_PER_MIN: "1000",
-  });
+  server = await startNext(env());
 }, 180_000);
 
 afterAll(async () => {
@@ -86,5 +88,20 @@ describe("the settings page", () => {
     expect(settings.status).toBe(200);
     expect(settings.html).toMatch(/Signed in [^<]*UTC/);
     expect(server.logs.join("")).not.toContain("ENVIRONMENT_FALLBACK");
+  });
+});
+
+describe("a TRUSTED_PROXIES that does not parse", () => {
+  it("fails every response, the health check's included, so the deployment never turns healthy", async () => {
+    const broken = await startNext(
+      { ...env(), TRUSTED_PROXIES: "not-an-ip" },
+      (health) => health.status === 500,
+    );
+    try {
+      expect((await fetch(`${broken.base}/en`)).status).toBe(500);
+      expect(broken.logs.join("")).toContain("not an address prefix");
+    } finally {
+      await broken.stop();
+    }
   });
 });

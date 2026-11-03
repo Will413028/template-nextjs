@@ -27,7 +27,6 @@ const HOUR = 60 * 60_000;
 type Runtime = {
   service: ReturnType<typeof createAuthService>;
   limiter: IPLimiter;
-  trusted: Prefix[];
 };
 
 const KEY = Symbol.for("features.auth.runtime");
@@ -38,9 +37,9 @@ const trustedStore = globalThis as unknown as Record<
   Prefix[] | undefined
 >;
 
-// TRUSTED_PROXIES, parsed once. Kept apart from the runtime: proxy.ts asks for it on requests that carry an
-// X-Request-ID (requestIdFor in server.ts), and making the service there would start its pool, its dummy hash and its
-// cleanup timer for requests that may never sign anyone in.
+// TRUSTED_PROXIES, parsed once (a value that does not parse throws on every call). Kept apart from the runtime:
+// proxy.ts asks for it on every request (requestIdFor in server.ts), and making the service there would start its
+// pool, its dummy hash and its cleanup timer for requests that may never sign anyone in.
 function trustedProxies(): Prefix[] {
   trustedStore[TRUSTED_KEY] ??= authConfig().trustedProxies.map(parsePrefix);
   return trustedStore[TRUSTED_KEY];
@@ -49,7 +48,7 @@ function trustedProxies(): Prefix[] {
 function create(): Runtime {
   // Configuration first: a bad value throws before anything starts, so a retry leaves nothing behind.
   const config = authConfig();
-  const trusted = trustedProxies();
+  trustedProxies();
   const limiter = new IPLimiter(config.rateLimitPerMinute, Date.now);
   const service = createAuthService({ db: db() });
   // Expired sessions and day-old sign-in counts; unref, so the timer never keeps the process up.
@@ -61,7 +60,7 @@ function create(): Runtime {
       )
       .catch((error) => console.error("auth cleanup failed", error));
   }, HOUR).unref();
-  return { service, limiter, trusted };
+  return { service, limiter };
 }
 
 function runtime(): Runtime {
@@ -80,7 +79,7 @@ export async function clientSource(): Promise<string> {
   const h = await headers();
   const peer = h.get(PEER_HEADER);
   const ip = peer
-    ? clientIP(peer, [h.get("x-forwarded-for") ?? ""], runtime().trusted)
+    ? clientIP(peer, [h.get("x-forwarded-for") ?? ""], trustedProxies())
     : null;
   if (!ip) {
     // without the preload every client would share one key, or pick its own through X-Forwarded-For
@@ -93,8 +92,9 @@ export async function clientSource(): Promise<string> {
 
 // Whether the TCP peer the preload recorded is a trusted proxy.
 export function fromTrustedProxy(headers: Headers): boolean {
+  const trusted = trustedProxies();
   const peer = headers.get(PEER_HEADER);
-  return peer !== null && isTrusted(peer, trustedProxies());
+  return peer !== null && isTrusted(peer, trusted);
 }
 
 // 0 when the request may go ahead, else the milliseconds until it may.

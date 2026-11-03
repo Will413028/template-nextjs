@@ -24,8 +24,10 @@ export type NextServer = {
   stop: () => Promise<void>;
 };
 
+// Ready once ready() accepts the health check's response: by default when it is 2xx, that is, the database is up.
 export async function startNext(
   env: Record<string, string>,
+  ready: (health: Response) => boolean = (health) => health.ok,
 ): Promise<NextServer> {
   const port = await freePort();
   const host = `127.0.0.1:${port}`;
@@ -52,11 +54,10 @@ export async function startNext(
       child.once("exit", () => resolve());
       child.kill("SIGTERM");
     });
-  // ready once the health check reaches the database
   for (let i = 0; i < 300; i++) {
     if (child.exitCode !== null) break;
     try {
-      if ((await fetch(`${base}/api/health`)).ok)
+      if (ready(await fetch(`${base}/api/health`)))
         return { base, host, logs, stop };
     } catch {}
     await new Promise((r) => setTimeout(r, 200));

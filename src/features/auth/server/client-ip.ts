@@ -85,10 +85,13 @@ function contains(p: Prefix, a: Address): boolean {
   return a.n >> shift === p.address >> shift;
 }
 
+const inAny = (trusted: Prefix[], a: Address) =>
+  trusted.some((p) => contains(p, a));
+
 // Whether the address is one of the trusted proxies.
 export function isTrusted(ip: string, trusted: Prefix[]): boolean {
   const address = parseAddress(ip);
-  return address !== null && trusted.some((p) => contains(p, address));
+  return address !== null && inAny(trusted, address);
 }
 
 export function clientIP(
@@ -98,14 +101,13 @@ export function clientIP(
 ): string | null {
   let address = parseAddress(peer);
   if (!address) return null;
-  const isTrusted = (a: Address) => trusted.some((p) => contains(p, a));
-  if (!isTrusted(address)) return format(address);
+  if (!inAny(trusted, address)) return format(address);
   const hops = forwardedFor.join(",").split(",");
   for (let i = hops.length - 1; i >= 0; i--) {
     const hop = parseAddress(hops[i] ?? "");
     if (!hop) break;
     address = hop;
-    if (!isTrusted(address)) break;
+    if (!inAny(trusted, address)) break;
   }
   return format(address);
 }
