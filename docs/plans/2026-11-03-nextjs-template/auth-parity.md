@@ -78,7 +78,7 @@
 | TestCreateSessionReturnsSession | httpapi/auth_resources_test.go | 不適用：測的是 201、`Location` 與 Session 回應主體（REST，計畫 D3=A 不做）；session 的時間欄位由 TestListSessions 涵蓋 | 2 | |
 | TestGetCurrentSession | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "lists the viewer's live sessions newest first and marks the current one" |
 | TestListSessions | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "lists the viewer's live sessions newest first and marks the current one" |
-| TestListSessionsExcludesExpired | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "lists the viewer's live sessions newest first and marks the current one" |
+| TestListSessionsExcludesExpired | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "lists the viewer's live sessions newest first and marks the current one"（idle）、"neither lists nor revokes a session past its 7-day limit"（absolute） |
 | TestDeleteSession | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "revokes the viewer's own session but not another user's" |
 | TestDeleteOtherUsersSession | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "revokes the viewer's own session but not another user's" |
 | TestDeleteCurrentUser | httpapi/auth_resources_test.go | 沿用（items 的斷言在步驟 3 加上，稽核列在步驟 4 加上） | 2 | `test/integration/auth.test.ts` "deletes the user and its sessions within ten minutes of signing in, and asks to sign in again after" |

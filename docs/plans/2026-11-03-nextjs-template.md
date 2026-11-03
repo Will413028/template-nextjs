@@ -55,7 +55,7 @@
 - [ ] **2. 認證垂直切片**（被擋於：D2 偏離清單經 Will 確認、D4、D7、步驟 1）
   - 範圍：需求清單 U2、U3、E1、E2、F1、F2；登入節流依 D7。2026-11-03 拆成 2a、2b、2c（一個 session 做不完；Will 同意），依序做，各自 commit 並以 CI 驗收；下面的「驗收」是三個子步驟合起來的驗收，2c 完成時逐項核對。
   - 不能動：步驟 1 的 CSP；session cookie 屬性由本步建立，之後照不變量第 3 列。
-  - [ ] **2a. 資料層與服務層**（被擋於：步驟 1；新依賴 `@node-rs/argon2` ~2.2.2 Will 2026-11-03 核准）
+  - [x] **2a. 資料層與服務層**（被擋於：步驟 1；新依賴 `@node-rs/argon2` ~2.2.2 Will 2026-11-03 核准）
     - 範圍：E1、E2 的 `src/features/auth/schema.ts` 與 migration；`src/features/auth/server/`：密碼（NFKC、長度、常見密碼清單、argon2id 與同時雜湊數上限、未知帳號跑 dummy hash）、session token（32 bytes base64url、只存 SHA-256、absolute／idle 期限、touch 頻率）、服務函式（註冊、登入、讀 session、登出、全部登出、列出／撤銷自己的 session、刪帳號要 10 分鐘內登入、cleanup）、記憶體節流（`IPLimiter`、`SignInThrottle`）、client IP 演算法（`clientIP`、`limitKey`，純函式）、安全事件日誌；branded `Viewer` 型別在這一步定義，2b 由 `server.ts` 匯出。不含 cookie、action、proxy、preload 與畫面。
     - 消費端：無（新模組）；2b 的 `server.ts`、`actions.ts`。`rg -n 'features/auth' src test`。
     - 驗收：auth-parity 標步驟 2 且屬服務層或 DB 的列填上 TS 測試名（`rg` 找得到）；unit 測試本機綠、integration 測試 CI 綠；`pnpm check` 本機綠；mutation：argon2 參數調低、DB 存明文 token、登入沿用舊 token、刪帳號不刪 session、拿掉同時雜湊數上限、撤銷 session 不檢查擁有者，各讓一個測試失敗（本機能跑的跑 unit；integration 的 mutation 用 CI 的 draft PR）。
@@ -144,7 +144,9 @@
 |---|---|---|---|---|
 | 0 spike | 完成 | 2026-11-03：`spike.md`、`auth-parity.md` 產出；orchestrator 重跑 a 的 vitest（20 過）、b 的 integration（各 2 過）、parity 完整性（87 名稱無缺） | a 的 4 個 Docker stack 測試與 c 未由 orchestrator 重跑（機器 load 高；子代理已實測，原始輸出在 `spike.md`）；amd64 未測 | 未 commit（repo 無首個 commit，併入步驟 1） |
 | 1 walking skeleton | 完成 | 2026-11-03：本機 `pnpm check` exit 0（unit 13）；CI run 41581092195 全綠（app 含 integration 8、policy、rename、stack：health 200、en／zh-TW 各 20 個 script 全帶 nonce、uid 1001、app 角色 DDL 被拒；Security 全綠）；mutation：PR #4 health 回 500 → stack job `app is unhealthy` 失敗、integration 測試 `expected 500 to be 200`；PR #5 刪一個 integration 測試 → `tests.integration: 7, locked at 8`；本機 mutation：depcruise 違規、server-only 標頭、noProcessEnv、zizmor unpinned-uses、hadolint、unit 測試數鎖；消費端 `rg` 無結果；獨立 code review 1 blocking＋5 should 已修 | `_global-error` 是靜態頁卻帶 nonce CSP（錯誤頁不 hydrate），記為步驟 2 處理；drizzle-kit 接著 0000 snapshot 產生下一支 migration 由步驟 2 第一個 schema 驗證 | dev `308cf6b` 之後（見 git log） |
-| 2 認證 | 未開始 | | | |
+| 2a 資料層與服務層 | 完成 | 2026-11-03：本機 `pnpm check` exit 0（unit 52）；CI run 41591430229 全綠（integration 31、Security 綠）；mutation：本機 argon2 記憶體調到 8 MiB、拿掉同時雜湊上限各讓一個 unit 測試失敗；CI draft PR #6（run 41591010631）四個 mutation（明文 token、登入不刪舊 session、FK 不 cascade、撤銷不檢查擁有者）讓 5 個目標 integration 測試失敗、其餘 25 過；auth-parity 2a 列的 35 個 TS 測試名 `rg` 全找得到；`/code-review high` 10 條（6 修、1 記入 2b、1 接受、2 交 Will），diff 視角審查 1 blocking＋2 should 已修、2 nit 不修；drizzle-kit 接著 0000 產生 0001（步驟 1 留下的未驗收項） | 交 Will 的 2 題：NFKC 後長度要不要再檢查、登入成功只清該來源的計數（皆比 Go 嚴格，算偏離）；遠端分支 `ci-mutation/2a-service` 待 Will 同意刪除 | dev `8ecd95f`…`8602365` |
+| 2b Server Action 邊界 | 未開始 | | | |
+| 2c 畫面與收尾 | 未開始 | | | |
 | 3 items | 未開始 | | | |
 | 4 帳號濫用與管理 | 延後（D4） | | | |
 | 5 rename | 未開始 | | | |
