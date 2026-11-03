@@ -24,7 +24,7 @@ type Runtime = {
   trusted: Prefix[];
 };
 
-const KEY = Symbol.for("template-nextjs.auth");
+const KEY = Symbol.for("features.auth.runtime");
 const store = globalThis as unknown as Record<symbol, Runtime | undefined>;
 
 function create(): Runtime {
