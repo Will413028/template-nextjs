@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDatabase, databaseReady } from "@/server/db";
@@ -71,7 +72,14 @@ describe("database roles", () => {
       database.ownerPassword,
       "SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(applied.rows[0]?.n).toBe(1);
+    // once each, however many migrations exist
+    const journal = JSON.parse(
+      readFileSync(
+        new URL("../../migrations/meta/_journal.json", import.meta.url),
+        "utf8",
+      ),
+    ) as { entries: unknown[] };
+    expect(applied.rows[0]?.n).toBe(journal.entries.length);
   });
 });
 
