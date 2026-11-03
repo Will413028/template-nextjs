@@ -97,8 +97,12 @@ export function createAuthService(options: AuthServiceOptions) {
   const db = options.db;
   const now = options.now ?? Date.now;
   const hasher = options.hasher ?? createHasher();
-  const throttle = options.throttle ?? new SignInThrottle(now);
   const log = options.log ?? stdoutLog;
+  const throttle =
+    options.throttle ??
+    new SignInThrottle(now, {
+      onFull: () => log("auth.sign_in_throttle_full", {}),
+    });
   const absoluteMs = options.sessionAbsoluteMs ?? 7 * DAY;
   const idleMs = options.sessionIdleMs ?? DAY;
   if (absoluteMs <= 0 || idleMs <= 0 || idleMs > absoluteMs) {

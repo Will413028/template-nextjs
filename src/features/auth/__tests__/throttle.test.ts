@@ -65,7 +65,7 @@ describe("SignInThrottle", () => {
   // plan D9=D: an attacker with many sources (an IPv6 /48 has 65,536 /64s) must not grow the counts without bound
   it("keeps at most maxEntries counts, evicting the least recently counted pair with fewer than 5 failures", () => {
     let now = 0;
-    const throttle = new SignInThrottle(() => now, 3);
+    const throttle = new SignInThrottle(() => now, { maxEntries: 3 });
     for (let n = 0; n < 5; n++) throttle.reserve("waiting", "192.0.2.1");
     now = 1;
     for (let n = 0; n < 3; n++) throttle.reserve("old", "192.0.2.1");
@@ -85,7 +85,11 @@ describe("SignInThrottle", () => {
   // Evicting a pair in its backoff would reset it: after its wait the next failure must wait longer, not start over
   it("never evicts a pair with 5 or more failures, even after its wait, and lets a new pair through uncounted then", () => {
     let now = 0;
-    const throttle = new SignInThrottle(() => now, 2);
+    let full = 0;
+    const throttle = new SignInThrottle(() => now, {
+      maxEntries: 2,
+      onFull: () => full++,
+    });
     for (const username of ["a", "b"]) {
       for (let n = 0; n < 5; n++) throttle.reserve(username, "192.0.2.1");
     }
@@ -94,6 +98,7 @@ describe("SignInThrottle", () => {
       expect(throttle.reserve("c", "192.0.2.1")).toBe(0);
     }
     expect(throttle.size).toBe(2);
+    expect(full).toBe(1); // reported once a minute
     expect(throttle.reserve("a", "192.0.2.1")).toBe(0); // the 6th failure
     expect(throttle.reserve("a", "192.0.2.1")).toBe(2 * MINUTE);
     // a freed slot is used again
@@ -104,15 +109,24 @@ describe("SignInThrottle", () => {
     expect(throttle.reserve("c", "192.0.2.1")).toBeGreaterThan(0);
   });
 
+  it.each([0, -1, 1.5, Number.NaN])("refuses maxEntries %s", (maxEntries) => {
+    expect(() => new SignInThrottle(Date.now, { maxEntries })).toThrow(
+      "maxEntries must be a positive integer",
+    );
+  });
+
   it("forgets counts untouched for a day", () => {
     let now = 0;
     const throttle = new SignInThrottle(() => now);
     throttle.reserve("old", "192.0.2.1");
+    for (let n = 0; n < 5; n++) throttle.reserve("old-backoff", "192.0.2.1");
     now = 23 * 60 * MINUTE;
     throttle.reserve("new", "192.0.2.1");
+    for (let n = 0; n < 5; n++) throttle.reserve("new-backoff", "192.0.2.1");
     now = 24 * 60 * MINUTE;
-    expect(throttle.sweep()).toBe(1);
+    expect(throttle.sweep()).toBe(2);
     expect(throttle.sweep()).toBe(0);
+    expect(throttle.size).toBe(2);
   });
 });
 

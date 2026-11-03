@@ -74,29 +74,53 @@ const FREE = 5;
 
 type Count = { failures: number; nextAllowedAt: number; updatedAt: number };
 
+// A pair with fewer than FREE failures, in a doubly linked list from least to most recently counted. A Map alone keeps
+// that order, but V8 leaves a deleted entry as a gap until the table is rebuilt and each new iterator walks past every
+// gap at the front, so taking the oldest of a Map after many evictions is not constant time (measured: 20,000
+// evictions from a 100,000-entry Map took 4.2 s).
+type Partial = Count & { key: string; older?: Partial; newer?: Partial };
+
+export type SignInThrottleOptions = {
+  maxEntries?: number;
+  // Called at most once a minute while a new pair's attempt goes ahead uncounted because the map is full.
+  onFull?: () => void;
+};
+
 // Exponential backoff per username and source (template-go-nextjs ADR account-abuse-and-lifecycle D4a): each source
 // has its own count, so one client's failures do not lock out another. The attempt is counted before the password is
 // checked, so requests sent together cannot all pass a wait that is not recorded yet. From the 5th consecutive
 // failure the next attempt waits 2^(n-5) minutes, at most an hour. A successful sign-in clears its source's count.
 //
 // When maxEntries pairs are counted, a new pair evicts the least recently counted pair with fewer than 5 failures, in
-// constant time. A pair that reached its backoff is never evicted (only the daily sweep drops it), so eviction resets
-// at most 4 free attempts, which an attacker able to fill the map already has from each of their sources. When every
-// pair has reached its backoff, a new pair's attempt goes ahead uncounted: such an attacker gets 5 attempts a minute
-// per source (the per-IP limit) at a username on sources not counted yet, instead of 4 and a wait.
+// constant time. A pair that reached its backoff is never evicted (only the daily sweep drops it), so an eviction
+// resets at most 4 free attempts (a source can have its own pairs evicted over and over, which the per-IP limit still
+// bounds). When every pair has reached its backoff, a new pair's attempt goes ahead uncounted and onFull is called:
+// until the sweep frees room, each source not counted yet gets the per-IP limit's 5 attempts a minute at a username
+// instead of 4 and a wait (plan D9).
 export class SignInThrottle {
-  // Keyed by source and username (a source has no spaces). Pairs with fewer than FREE failures, least recently
-  // counted first (a count is re-inserted when it changes); the eviction candidates.
-  private readonly partial = new Map<string, Count>();
+  // Keyed by source and username (a source has no spaces).
+  private readonly partial = new Map<string, Partial>();
+  private oldest: Partial | undefined;
+  private newest: Partial | undefined;
   // Pairs with FREE or more failures; never evicted.
   private readonly backoff = new Map<string, Count>();
+  private readonly maxEntries: number;
+  private readonly onFull: () => void;
+  private lastFullReport = Number.NEGATIVE_INFINITY;
 
   constructor(
     private readonly now: Clock,
-    private readonly maxEntries = MAX_ENTRIES,
-  ) {}
+    options: SignInThrottleOptions = {},
+  ) {
+    this.maxEntries = options.maxEntries ?? MAX_ENTRIES;
+    if (!Number.isSafeInteger(this.maxEntries) || this.maxEntries < 1) {
+      throw new Error("maxEntries must be a positive integer");
+    }
+    this.onFull = options.onFull ?? (() => {});
+  }
 
-  // Counts the attempt and returns 0, or returns the milliseconds to wait (at least a second) without counting it.
+  // Returns the milliseconds to wait (at least a second) without counting the attempt, or 0: the attempt is counted,
+  // or goes ahead uncounted when the map is full of pairs in their backoff.
   reserve(username: string, source: string): number {
     const now = this.now();
     const key = `${source} ${username}`;
@@ -105,9 +129,14 @@ export class SignInThrottle {
       return Math.max(1000, count.nextAllowedAt - now);
     }
     if (!count && this.size >= this.maxEntries) {
-      const oldest = this.partial.keys().next();
-      if (oldest.done) return 0;
-      this.partial.delete(oldest.value);
+      if (!this.oldest) {
+        if (now - this.lastFullReport >= MINUTE) {
+          this.lastFullReport = now;
+          this.onFull();
+        }
+        return 0;
+      }
+      this.removePartial(this.oldest.key);
     }
     const failures = (count?.failures ?? 0) + 1;
     const wait =
@@ -115,9 +144,9 @@ export class SignInThrottle {
         ? Math.min(2 ** Math.min(failures - FREE, 6), 60) * MINUTE
         : 0;
     const next = { failures, nextAllowedAt: now + wait, updatedAt: now };
-    this.partial.delete(key);
+    this.removePartial(key);
     if (failures >= FREE) this.backoff.set(key, next);
-    else this.partial.set(key, next); // last: the most recently counted
+    else this.appendPartial({ ...next, key });
     return 0;
   }
 
@@ -126,7 +155,7 @@ export class SignInThrottle {
   // plan D2 deviation 11).
   succeeded(username: string, source: string): void {
     const key = `${source} ${username}`;
-    this.partial.delete(key);
+    this.removePartial(key);
     this.backoff.delete(key);
   }
 
@@ -134,18 +163,38 @@ export class SignInThrottle {
     return this.partial.size + this.backoff.size;
   }
 
-  // Drops counts untouched for a day.
+  // Drops counts untouched for a day. The partial list is in updatedAt order, so it stops at the first one kept.
   sweep(): number {
     const cutoff = this.now() - KEEP_FOR;
     let dropped = 0;
-    for (const counts of [this.partial, this.backoff]) {
-      for (const [key, count] of counts) {
-        if (count.updatedAt <= cutoff) {
-          counts.delete(key);
-          dropped++;
-        }
+    while (this.oldest && this.oldest.updatedAt <= cutoff) {
+      this.removePartial(this.oldest.key);
+      dropped++;
+    }
+    for (const [key, count] of this.backoff) {
+      if (count.updatedAt <= cutoff) {
+        this.backoff.delete(key);
+        dropped++;
       }
     }
     return dropped;
+  }
+
+  private appendPartial(node: Partial): void {
+    node.older = this.newest;
+    if (this.newest) this.newest.newer = node;
+    else this.oldest = node;
+    this.newest = node;
+    this.partial.set(node.key, node);
+  }
+
+  private removePartial(key: string): void {
+    const node = this.partial.get(key);
+    if (!node) return;
+    this.partial.delete(key);
+    if (node.older) node.older.newer = node.newer;
+    else this.oldest = node.newer;
+    if (node.newer) node.newer.older = node.older;
+    else this.newest = node.older;
   }
 }
