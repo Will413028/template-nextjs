@@ -78,7 +78,8 @@
         "src/server/env.ts",
         "scripts/migrate.mts",
         "test/integration/health.test.ts",
-        "test/integration/next-server.ts"
+        "test/integration/next-server.ts",
+        "test/stack/flow.test.ts"
       ],
       "linter": {
         "rules": {

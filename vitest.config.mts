@@ -30,8 +30,17 @@ export default defineConfig({
         extends: true,
         test: {
           name: "integration",
-          include: ["test/**/*.test.ts"],
+          include: ["test/integration/**/*.test.ts"],
           hookTimeout: 180_000,
+          testTimeout: 30_000,
+        },
+      },
+      // pnpm test:stack: the running compose stack through Caddy; only CI's stack job runs it
+      {
+        extends: true,
+        test: {
+          name: "stack",
+          include: ["test/stack/**/*.test.ts"],
           testTimeout: 30_000,
         },
       },

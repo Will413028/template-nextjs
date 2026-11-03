@@ -98,12 +98,18 @@ jobs:
 
   # Builds the production images, applies migrations with the migrate image, and checks the stack through caddy.
   stack:
-    name: Compose stack (images + migrate + health)
+    name: Compose stack (images + migrate + health + flow)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # for the end-to-end flow (pnpm test:stack), which runs on the runner against the stack
+      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        with:
+          runtime: node@26
+          cache: true
+          require-lockfile: true
       - run: make lint-docker
       # .env and the password files under .secrets/, as a developer gets them
       - run: make init-env
@@ -143,18 +149,39 @@ jobs:
           test "$(jq -r .status /tmp/health.json)" = ok
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/en)" = 200
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/zh-TW)" = 200
-      - name: Every script on every locale's page carries this response's CSP nonce
+      - name: Every script on every locale's page and on a 404 carries this response's CSP nonce
         run: |
-          for locale in en zh-TW; do
-            curl -sS -D /tmp/page.headers -o /tmp/page.html "http://localhost/$locale"
+          for path in en zh-TW en/no-such-page; do
+            curl -sS -D /tmp/page.headers -o /tmp/page.html "http://localhost/$path"
             nonce="$(tr -d '\r' < /tmp/page.headers | sed -n "s/^content-security-policy:.*'nonce-\([^']*\)'.*/\1/Ip")"
             test -n "$nonce"
             total="$(grep -o '<script' /tmp/page.html | wc -l)"
             with_nonce="$(grep -o "<script[^>]*nonce=\"$nonce\"" /tmp/page.html | wc -l)"
-            echo "$locale: scripts $total, with this response's nonce $with_nonce"
+            echo "/$path: $(head -n1 /tmp/page.headers | tr -d '\r'), scripts $total, with this response's nonce $with_nonce"
             test "$total" -gt 0 && test "$total" = "$with_nonce"
             if grep -qi '^x-powered-by:' /tmp/page.headers; then echo "X-Powered-By is sent"; exit 1; fi
           done
+          head -n1 /tmp/page.headers | grep -q ' 404'
+      # Caddy's {http.request.uuid} is a UUIDv4; the app makes a v7 for any id it does not believe (TRUSTED_PROXIES)
+      - name: Caddy replaces the client's request id with its own, which the app believes and returns
+        run: |
+          id="$(curl -sS -o /dev/null -D - -H 'X-Request-ID: client-sent' http://localhost/en | tr -d '\r' | sed -n 's/^x-request-id: //Ip')"
+          echo "X-Request-ID: $id"
+          [[ "$id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]
+      # test/stack/flow.test.ts, with the action ids of the app image's own build
+      - name: A user signs up, signs in, sees the dashboard and signs out, through caddy
+        run: |
+          mkdir -p "$RUNNER_TEMP/next/server"
+          docker compose cp app:/app/.next/server/server-reference-manifest.json "$RUNNER_TEMP/next/server/"
+          STACK_BASE_URL=http://localhost STACK_NEXT_DIR="$RUNNER_TEMP/next" pnpm test:stack
+      - name: Each security event the flow caused carries caddy's request id
+        run: |
+          docker compose logs --no-log-prefix app | grep '"event":"auth\.sign' > /tmp/events.log || true
+          cat /tmp/events.log
+          test "$(grep -c . /tmp/events.log)" -ge 3
+          if grep -v -E '"request_id":"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-' /tmp/events.log; then
+            echo "the events above lack caddy's request id"; exit 1
+          fi
       - name: The app role cannot change the schema
         run: |
           out="$(docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U template_nextjs_app -d template_nextjs -c 'CREATE TABLE intruder (id int)' 2>&1)" && exit 1

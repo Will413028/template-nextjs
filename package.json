@@ -22,7 +22,8 @@
     "test:watch": "vitest --project unit",
     "check": "pnpm lint && pnpm check:deps && pnpm check:arch && pnpm check:migrations && pnpm test:report && pnpm check:locks && pnpm build",
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 || exit 0; lefthook install || echo 'warning: lefthook install failed, git hooks are not active' >&2",
-    "test:integration": "vitest run --project integration --reporter=default --reporter=json --outputFile.json=integration-report.json"
+    "test:integration": "vitest run --project integration --reporter=default --reporter=json --outputFile.json=integration-report.json",
+    "test:stack": "vitest run --project stack"
   },
   "dependencies": {
     "@node-rs/argon2": "~2.2.2",

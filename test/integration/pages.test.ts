@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import en from "../../messages/en.json";
 import zhTW from "../../messages/zh-TW.json";
+import { actionIds } from "./action-client";
+import { signUpToSignOut, visitor } from "./flow";
 import { type NextServer, startNext } from "./next-server";
 import {
   APP,
@@ -62,4 +64,27 @@ describe("an unknown path", () => {
       expect(withNonce).toBe(total);
     },
   );
+});
+
+describe("the end-to-end flow", () => {
+  it("signs up, signs in, shows the dashboard with the username, signs out and sends the user back to sign in", async () => {
+    await signUpToSignOut(server.base, actionIds());
+  });
+});
+
+describe("the settings page", () => {
+  it("shows each session's times in the configured time zone, so next-intl never falls back to the server's", async () => {
+    const user = visitor(server.base, actionIds());
+    const username = `zone-${Date.now().toString(36)}`;
+    expect(
+      await user.act("signUp", [
+        null,
+        { username, password: "a long enough password" },
+      ]),
+    ).toEqual({ ok: true });
+    const settings = await user.get("/en/settings");
+    expect(settings.status).toBe(200);
+    expect(settings.html).toMatch(/Signed in [^<]*UTC/);
+    expect(server.logs.join("")).not.toContain("ENVIRONMENT_FALLBACK");
+  });
 });
