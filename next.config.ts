@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // Do not announce the framework (X-Powered-By: Next.js).
   poweredByHeader: false,
+  experimental: { serverActions: { allowedOrigins: ["evil.test"] } },
   // Read at runtime (src/features/auth/server/password.ts), so file tracing cannot see it from the imports.
   outputFileTracingIncludes: {
     "/**": ["./src/features/auth/server/common-passwords.txt"],

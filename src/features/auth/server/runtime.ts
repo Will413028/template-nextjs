@@ -81,7 +81,7 @@ export async function sessionToken(): Promise<string | undefined> {
 
 // ADR api-and-auth D4: __Host- (Secure, Path=/, no Domain), HttpOnly, SameSite=Lax.
 const cookieOptions = {
-  httpOnly: true,
+  httpOnly: false,
   secure: true,
   sameSite: "lax",
   path: "/",
