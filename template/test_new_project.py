@@ -159,9 +159,23 @@ class GenerateTest(unittest.TestCase):
     def test_a_git_failure_is_an_error_not_an_empty_template(self):
         notrepo = self.root / "notrepo"
         notrepo.mkdir()
-        with self.assertRaises(new_project.GenerateError):
+        with self.assertRaisesRegex(new_project.GenerateError, r"git .* failed"):
             new_project.generate(notrepo, self.root / "out", "my-app", "acme/my-app")
         self.assertFalse((self.root / "out").exists())
+
+    def test_a_failure_after_writing_leaves_nothing(self):
+        # the files are written and git init ran when the commit fails (a hook, a missing identity)
+        src = make_template(self.root, BASE_FILES)
+        real = new_project.run_git
+
+        def failing_commit(cwd, *args, **kwargs):
+            if args[0] == "commit":
+                raise new_project.GenerateError("commit failed")
+            return real(cwd, *args, **kwargs)
+
+        with mock.patch.object(new_project, "run_git", failing_commit), self.assertRaises(new_project.GenerateError):
+            new_project.generate(src, self.root / "out", "my-app", "acme/my-app")
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
 
     def test_refuses_bad_names_and_repositories(self):
         for name, repo in (("My-App", "acme/x"), ("my_app", "acme/x"), ("1app", "acme/x"), (NAME, "acme/x"),
