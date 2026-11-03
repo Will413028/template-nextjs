@@ -9,10 +9,11 @@ import {
   signOut,
   signOutEverywhere,
 } from "../actions";
+import { useFailureMessage } from "./use-failure-message";
 
 const ACTIONS = { signOut, signOutEverywhere, revokeSession, deleteAccount };
 
-type State = { ok: boolean; code?: string } | null;
+type State = Awaited<ReturnType<(typeof ACTIONS)[keyof typeof ACTIONS]>> | null;
 
 // One button bound to a session action. After it succeeds the page reloads its data; an action that ended this
 // browser's session goes to the sign-in page instead.
@@ -26,6 +27,7 @@ export function SessionButton({
   endsSession?: boolean;
 }) {
   const t = useTranslations("auth");
+  const failureMessage = useFailureMessage();
   const router = useRouter();
   const [state, run, pending] = useActionState<State, FormData>(
     ACTIONS[action],
@@ -46,7 +48,7 @@ export function SessionButton({
       <button type="submit" disabled={pending}>
         {t(action)}
       </button>
-      {state && !state.ok && <span role="alert">{state.code}</span>}
+      {state && !state.ok && <span role="alert">{failureMessage(state)}</span>}
     </form>
   );
 }

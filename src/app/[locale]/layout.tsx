@@ -12,7 +12,10 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: "metadata" });
+  const t = await getTranslations({
+    locale: hasLocale(routing.locales, locale) ? locale : routing.defaultLocale,
+    namespace: "metadata",
+  });
   return {
     title: { default: t("title"), template: `%s | ${t("title")}` },
     description: t("description"),

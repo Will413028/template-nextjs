@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { fieldErrors, signInInput, signUpInput } from "../credentials";
 
 function errors(
@@ -69,6 +70,17 @@ describe("sign-in input", () => {
     expect(errors(signInInput, { username: "", password: "" })).toEqual({
       username: "too_short",
       password: "too_short",
+    });
+  });
+});
+
+describe("field errors", () => {
+  it("turn a message that is not a field code into invalid, so a form never shows it raw", () => {
+    const result = z
+      .object({ username: z.string().refine(() => false, "Bad username") })
+      .safeParse({ username: "alice" });
+    expect(result.error && fieldErrors(result.error)).toEqual({
+      username: "invalid",
     });
   });
 });

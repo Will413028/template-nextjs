@@ -6,25 +6,38 @@ import { z } from "zod";
 
 const codePoints = (s: string) => [...s].length;
 
+// What a field can be wrong with: the forms translate each (auth.fields in messages/*.json, checked by tsc).
+const FIELD_CODES = [
+  "required",
+  "too_short",
+  "too_long",
+  "invalid_characters",
+  "username_taken",
+  "password_too_common",
+  "invalid",
+] as const;
+export type FieldCode = (typeof FIELD_CODES)[number];
+
+const issue = (message: FieldCode) => ({ message });
+
 const length = (min: number, max: number) =>
   z
     .string()
-    .refine((s) => codePoints(s) >= min, { message: "too_short" })
-    .refine((s) => codePoints(s) <= max, { message: "too_long" });
+    .refine((s) => codePoints(s) >= min, issue("too_short"))
+    .refine((s) => codePoints(s) <= max, issue("too_long"));
 
 export const signUpInput = z.object({
-  username: length(3, 50).refine((s) => /^[A-Za-z0-9_.-]*$/.test(s), {
-    message: "invalid_characters",
-  }),
+  username: length(3, 50).refine(
+    (s) => /^[A-Za-z0-9_.-]*$/.test(s),
+    issue("invalid_characters"),
+  ),
   // NIST SP 800-63B-4: 15 or more, no composition rules; the common-password check runs on the server. The minimum
   // counts the NFKC form the server hashes, which can be shorter than what was typed; the maximum counts the input
   // (plan D2 deviation 12; template-go-nextjs counts the input for both).
   password: z
     .string()
-    .refine((s) => codePoints(s.normalize("NFKC")) >= 15, {
-      message: "too_short",
-    })
-    .refine((s) => codePoints(s) <= 128, { message: "too_long" }),
+    .refine((s) => codePoints(s.normalize("NFKC")) >= 15, issue("too_short"))
+    .refine((s) => codePoints(s) <= 128, issue("too_long")),
 });
 
 export const signInInput = z.object({
@@ -32,16 +45,21 @@ export const signInInput = z.object({
   password: length(1, 128),
 });
 
-export type FieldErrors = Partial<Record<"username" | "password", string>>;
+export type FieldErrors = Partial<Record<"username" | "password", FieldCode>>;
 
-// The first problem of each field, as a code the forms translate (messages/*.json).
+const isFieldCode = (s: string): s is FieldCode =>
+  (FIELD_CODES as readonly string[]).includes(s);
+
+// The first problem of each field, as a code the forms translate. A message that is not a FieldCode (a zod default)
+// becomes "invalid", so the form never shows a raw message.
 export function fieldErrors(error: z.ZodError): FieldErrors {
   const fields: FieldErrors = {};
-  for (const issue of error.issues) {
-    const field = issue.path[0];
+  for (const problem of error.issues) {
+    const field = problem.path[0];
     if ((field === "username" || field === "password") && !fields[field]) {
-      fields[field] =
-        issue.code === "invalid_type" ? "required" : issue.message;
+      const code =
+        problem.code === "invalid_type" ? "required" : problem.message;
+      fields[field] = isFieldCode(code) ? code : "invalid";
     }
   }
   return fields;

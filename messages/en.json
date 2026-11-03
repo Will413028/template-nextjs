@@ -29,6 +29,27 @@
     "settings": "Settings",
     "sessions": "Signed-in devices",
     "lastUsed": "Last used {at}",
-    "thisDevice": "this device"
+    "thisDevice": "this device",
+    "errors": {
+      "invalid_input": "Some fields are invalid.",
+      "invalid_credentials": "Incorrect username or password.",
+      "login_throttled": "Too many failed sign-ins for this username. Try again in {minutes, plural, one {# minute} other {# minutes}}.",
+      "rate_limited": "Too many attempts. Try again in {seconds, plural, one {# second} other {# seconds}}.",
+      "username_taken": "This username is already taken.",
+      "password_too_common": "This password is too common. Choose another.",
+      "unauthenticated": "Your session has ended. Please sign in again.",
+      "not_found": "That session has already ended.",
+      "session_invalid": "Your session has ended. Please sign in again.",
+      "reauthentication_required": "For your security, sign in again, then delete the account within 10 minutes."
+    },
+    "fields": {
+      "required": "Required.",
+      "too_short": "Too short.",
+      "too_long": "Too long.",
+      "invalid_characters": "Use only letters, digits, underscores, dots and hyphens.",
+      "username_taken": "This username is already taken.",
+      "password_too_common": "This password is too common. Choose another.",
+      "invalid": "Invalid."
+    }
   }
 }

@@ -29,6 +29,27 @@
     "settings": "設定",
     "sessions": "登入中的裝置",
     "lastUsed": "最後使用 {at}",
-    "thisDevice": "這個裝置"
+    "thisDevice": "這個裝置",
+    "errors": {
+      "invalid_input": "部分欄位不正確。",
+      "invalid_credentials": "使用者名稱或密碼錯誤。",
+      "login_throttled": "這個使用者名稱登入失敗次數過多，請 {minutes} 分鐘後再試。",
+      "rate_limited": "嘗試次數過多，請 {seconds} 秒後再試。",
+      "username_taken": "這個使用者名稱已被使用。",
+      "password_too_common": "這個密碼太常見，請換一個。",
+      "unauthenticated": "登入已失效，請重新登入。",
+      "not_found": "這個登入已經結束。",
+      "session_invalid": "登入已失效，請重新登入。",
+      "reauthentication_required": "為了安全，請重新登入，並在 10 分鐘內刪除帳號。"
+    },
+    "fields": {
+      "required": "必填。",
+      "too_short": "太短。",
+      "too_long": "太長。",
+      "invalid_characters": "只能使用英文字母、數字、底線、句點與連字號。",
+      "username_taken": "這個使用者名稱已被使用。",
+      "password_too_common": "這個密碼太常見，請換一個。",
+      "invalid": "不正確。"
+    }
   }
 }
