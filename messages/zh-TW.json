@@ -21,15 +21,17 @@
     "password": "密碼",
     "signIn": "登入",
     "signUp": "註冊",
+    "signInTitle": "歡迎回來",
+    "signInSubtitle": "登入你的帳號。",
+    "signUpTitle": "建立帳號",
+    "signUpSubtitle": "選一個使用者名稱和一段夠長的密碼；不需要特殊字元。",
+    "usernameHint": "3 到 50 個英文字母、數字、底線、句點或連字號。",
+    "passwordHint": "至少 15 個字元。",
+    "noAccount": "還沒有帳號？",
+    "hasAccount": "已經有帳號？",
     "signOut": "登出",
     "signOutEverywhere": "登出所有裝置",
-    "revokeSession": "登出這個裝置",
-    "deleteAccount": "刪除帳號",
-    "signedInAs": "已登入：{username}",
-    "settings": "設定",
-    "sessions": "登入中的裝置",
-    "lastUsed": "最後使用 {at}",
-    "thisDevice": "這個裝置",
+    "revokeSession": "登出",
     "errors": {
       "invalid_input": "部分欄位不正確。",
       "invalid_credentials": "使用者名稱或密碼錯誤。",
@@ -51,5 +53,28 @@
       "password_too_common": "這個密碼太常見，請換一個。",
       "invalid": "不正確。"
     }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "overview": "總覽",
+    "settings": "設定",
+    "welcome": "歡迎，{username}",
+    "intro": "這是你帳號的首頁。在總覽與設定旁邊加上你自己的頁面。",
+    "devices": "登入中的裝置",
+    "manageDevices": "到設定查看並登出。"
+  },
+  "settings": {
+    "title": "設定",
+    "sessions": "登入中的裝置",
+    "sessionsDescription": "目前登入你帳號的每個瀏覽器。不認得的請登出。",
+    "signedInAt": "登入於 {at}",
+    "lastUsedAt": "最後使用 {at}",
+    "thisDevice": "這個裝置",
+    "signOutEverywhereDescription": "結束所有登入，包括這一個。",
+    "deleteTitle": "刪除帳號",
+    "deleteDescription": "刪除你的帳號與其中所有資料，並登出所有裝置。這個動作無法復原。",
+    "deleteConfirm": "我了解這個動作無法復原",
+    "deleteAccount": "刪除我的帳號",
+    "signInAgain": "重新登入"
   }
 }

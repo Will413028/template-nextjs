@@ -21,15 +21,17 @@
     "password": "Password",
     "signIn": "Sign in",
     "signUp": "Sign up",
+    "signInTitle": "Welcome back",
+    "signInSubtitle": "Sign in to your account.",
+    "signUpTitle": "Create an account",
+    "signUpSubtitle": "Choose a username and a long passphrase; no special characters are required.",
+    "usernameHint": "3 to 50 letters, digits, underscores, dots or hyphens.",
+    "passwordHint": "At least 15 characters.",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
     "signOut": "Sign out",
     "signOutEverywhere": "Sign out everywhere",
-    "revokeSession": "Sign out this session",
-    "deleteAccount": "Delete account",
-    "signedInAs": "Signed in as {username}",
-    "settings": "Settings",
-    "sessions": "Signed-in devices",
-    "lastUsed": "Last used {at}",
-    "thisDevice": "this device",
+    "revokeSession": "Sign out",
     "errors": {
       "invalid_input": "Some fields are invalid.",
       "invalid_credentials": "Incorrect username or password.",
@@ -51,5 +53,28 @@
       "password_too_common": "This password is too common. Choose another.",
       "invalid": "Invalid."
     }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "overview": "Overview",
+    "settings": "Settings",
+    "welcome": "Welcome, {username}",
+    "intro": "Your account's home. Add your own pages next to Overview and Settings.",
+    "devices": "Signed-in devices",
+    "manageDevices": "Review and sign them out in Settings."
+  },
+  "settings": {
+    "title": "Settings",
+    "sessions": "Signed-in devices",
+    "sessionsDescription": "Every browser signed in to your account. Sign out any you do not recognize.",
+    "signedInAt": "Signed in {at}",
+    "lastUsedAt": "Last used {at}",
+    "thisDevice": "This device",
+    "signOutEverywhereDescription": "Ends every session, this one included.",
+    "deleteTitle": "Delete account",
+    "deleteDescription": "Deletes your account and everything in it, and signs you out on every device. This cannot be undone.",
+    "deleteConfirm": "I understand this cannot be undone",
+    "deleteAccount": "Delete my account",
+    "signInAgain": "Sign in again"
   }
 }

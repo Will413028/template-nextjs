@@ -1,14 +1,26 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { CredentialsForm } from "@/features/auth";
 import { Link } from "@/i18n/navigation";
 
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("auth");
+  return { title: t("signUp") };
+}
+
 export default async function SignUpPage() {
   const t = await getTranslations("auth");
   return (
-    <main className="mx-auto flex max-w-sm flex-col gap-4 px-6 py-16">
-      <h1 className="font-bold text-2xl">{t("signUp")}</h1>
+    <>
+      <h1 className="mb-2 font-medium text-2xl">{t("signUpTitle")}</h1>
+      <p className="mb-8 text-muted text-sm">{t("signUpSubtitle")}</p>
       <CredentialsForm mode="sign-up" />
-      <Link href="/sign-in">{t("signIn")}</Link>
-    </main>
+      <p className="mt-6 text-center text-muted text-sm">
+        {t("hasAccount")}{" "}
+        <Link href="/sign-in" className="text-foreground hover:underline">
+          {t("signIn")}
+        </Link>
+      </p>
+    </>
   );
 }
