@@ -1,4 +1,4 @@
 {
   "suppressions": { "typescript": 0, "sql": 0 },
-  "tests": { "unit": 78, "integration": 53 }
+  "tests": { "unit": 78, "integration": 55 }
 }
