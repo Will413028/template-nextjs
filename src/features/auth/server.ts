@@ -61,9 +61,10 @@ const VALID_REQUEST_ID = /^[A-Za-z0-9-]{1,64}$/;
 // loopback (runtime.ts clientSource) gets a new id here, so its log lines do not carry the id its client received;
 // the app's own forms are never forwarded.
 export function requestIdFor(headers: Headers): string {
-  const trusted = fromTrustedProxy(headers);
   const sent = headers.get(REQUEST_ID_HEADER);
-  return trusted && sent && VALID_REQUEST_ID.test(sent) ? sent : randomUUIDv7();
+  return sent && VALID_REQUEST_ID.test(sent) && fromTrustedProxy(headers)
+    ? sent
+    : randomUUIDv7();
 }
 
 // Runs an action with its request's id (set by proxy.ts) on every security event it logs.
