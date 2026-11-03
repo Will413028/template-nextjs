@@ -18,6 +18,7 @@ next-env.d.ts
 
 # Reports read by scripts/check_locks.py
 test-report.json
+integration-report.json
 
 # Pinned release binaries (Makefile)
 /bin/
