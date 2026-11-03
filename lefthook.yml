@@ -17,7 +17,7 @@ pre-commit:
       run: pnpm exec tsc --noEmit
       priority: 2
 
-# CI's checks, minus the jobs that start containers (integration tests, compose stack) and the rename smoke test:
+# CI's checks, minus the jobs that start containers (integration tests, compose stack):
 # a push is stopped here even when CI has not run yet. The security tools are local binaries (brew install actionlint zizmor gitleaks osv-scanner).
 pre-push:
   parallel: true
@@ -36,9 +36,16 @@ pre-push:
         python3 -m unittest discover -s scripts -p 'test_*.py' &&
         if git rev-parse -q --verify origin/main > /dev/null; then range=origin/main..HEAD; else range=HEAD; fi &&
         python3 scripts/check_commit_policy.py --range "$range"
+    # >>> template-only
+    # the generator's own tests (CI's generate job also checks a generated project end to end)
+    template:
+      run: python3 -m unittest discover -s template -p 'test_*.py'
+    # <<< template-only
     # osv-scanner gets each tracked lockfile by name: its recursive walk honours a parent repository's .gitignore,
-    # so a clone nested in an ignored directory would scan nothing and fail. The step 0 spike lockfiles under
-    # docs/plans/ are a frozen record that nothing installs, so they are not scanned.
+    # so a clone nested in an ignored directory would scan nothing and fail.
+    # >>> template-only
+    # The step 0 spike lockfiles under docs/plans/ are a frozen record that nothing installs, so they are not scanned.
+    # <<< template-only
     security:
       run: >-
         actionlint && zizmor --offline .github/workflows && gitleaks git --redact --no-banner . &&

@@ -51,14 +51,19 @@ generate-migration:
 
 # --- Setup ---
 
-# Renames packages, database and role names, branding and the repository link (default Will413028/<NAME>; REPO=
-# overrides it).
-.PHONY: rename
-rename:
+# >>> template-only
+# Generates a new project into DEST (missing or empty): names, database and role names, repository link (default
+# Will413028/<NAME>; REPO= overrides it); a new git repository with one commit and no remote.
+.PHONY: new
+new:
 ifndef NAME
-	$(error NAME is required. Usage: make rename NAME=my-project [REPO=owner/my-project])
+	$(error NAME and DEST are required. Usage: make new NAME=my-project DEST=../my-project [REPO=owner/my-project])
 endif
-	@python3 scripts/rename.py "$(NAME)" $(if $(REPO),--repo "$(REPO)")
+ifndef DEST
+	$(error NAME and DEST are required. Usage: make new NAME=my-project DEST=../my-project [REPO=owner/my-project])
+endif
+	@python3 template/new_project.py "$(NAME)" "$(DEST)" $(if $(REPO),--repo "$(REPO)")
+# <<< template-only
 
 .PHONY: init-env
 init-env:

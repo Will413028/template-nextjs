@@ -75,10 +75,17 @@ jobs:
           else range="$BASE..$HEAD_SHA"; fi
           python3 scripts/check_commit_policy.py --range "$range"
 
-  # A derived project starts with `make rename`; it must rewrite every template name and still pass its checks.
-  rename:
-    name: Rename smoke test
+  # >>> template-only
+  # A project starts with `make new`: generate one and run every check of the app job on it, integration tests included
+  # (the database and role names change). This job and its comments are left out of the generated project.
+  generate:
+    name: Generate a project (make new)
     runs-on: ubuntu-latest
+    env:
+      GIT_AUTHOR_NAME: ci
+      GIT_AUTHOR_EMAIL: ci@example.invalid
+      GIT_COMMITTER_NAME: ci
+      GIT_COMMITTER_EMAIL: ci@example.invalid
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,25 +95,40 @@ jobs:
           runtime: node@26
           cache: true
           require-lockfile: true
-      # A repository other than the default (Will413028/<NAME>): with the default, a rename that skipped the
-      # repository link would still produce the right one, so nothing could tell.
-      - run: make rename NAME=ci-probe REPO=ci-owner/ci-probe-repo
-      # --untracked: a file the rename creates is not in the index yet
-      - name: No file outside the plans still names the template
+      - run: python3 -m unittest discover -s template -p 'test_*.py'
+      # A repository other than the default (Will413028/<NAME>) that names the project: it must be written as given.
+      - run: make new NAME=ci-probe DEST="$RUNNER_TEMP/ci-probe" REPO=ci-owner/ci-probe-fork
+      - name: One commit, no remote, the commit policy passes
+        working-directory: ${{ runner.temp }}/ci-probe
         run: |
-          if git grep --untracked -n -i -E 'template[-_]nextjs' -- ':!docs/plans/**'; then
-            echo "files above still name the template; update scripts/rename.py"; exit 1
-          fi
+          test "$(git rev-list --count HEAD)" = 1
+          test -z "$(git remote)"
+          test -z "$(git status --porcelain)"
+          python3 scripts/check_commit_policy.py --range HEAD
       # ci[-]probe: the pattern must not match this line itself
-      - name: The repository links point to the given repository, none to the default
+      - name: Nothing names the template; the repository links point to the given repository
+        working-directory: ${{ runner.temp }}/ci-probe
         run: |
-          grep -F 'github.com/ci-owner/ci-probe-repo/security/advisories/new' SECURITY.md ||
-            { echo "SECURITY.md does not link to ci-owner/ci-probe-repo"; exit 1; }
-          if git grep --untracked -n -E 'Will413028/ci[-]probe' -- ':!docs/plans/**'; then
-            echo "files above link to the default repository, not to REPO"; exit 1
+          if git grep -n -i -E 'template[-_]nextjs|Will413028/ci[-]probe' ; then
+            echo "files above name the template or the default repository"; exit 1
           fi
-      # lint, dependency rules, migration checks, unit tests, locks and the production build of the renamed project
-      - run: pnpm check
+          grep -F 'github.com/ci-owner/ci-probe-fork/security/advisories/new' SECURITY.md ||
+            { echo "SECURITY.md does not link to ci-owner/ci-probe-fork"; exit 1; }
+      - name: Install the generated project
+        working-directory: ${{ runner.temp }}/ci-probe
+        run: pnpm install --frozen-lockfile
+      - name: pnpm check in the generated project
+        working-directory: ${{ runner.temp }}/ci-probe
+        run: pnpm check
+      - name: Python tests in the generated project
+        working-directory: ${{ runner.temp }}/ci-probe
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Integration tests in the generated project
+        working-directory: ${{ runner.temp }}/ci-probe
+        run: |
+          pnpm test:integration
+          python3 scripts/check_locks.py --vitest-report test-report.json --integration-report integration-report.json
+  # <<< template-only
 
   # Builds the production images, applies migrations with the migrate image, and checks the stack through caddy.
   stack:
@@ -206,7 +228,13 @@ jobs:
     # The only required check on main: it passes when every other job in this workflow succeeded or was skipped.
     name: gate (ci)
     if: always()
-    needs: [app, policy, rename, stack]
+    needs:
+      - app
+      - policy
+      - stack
+      # >>> template-only
+      - generate
+      # <<< template-only
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

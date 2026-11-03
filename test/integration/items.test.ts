@@ -15,8 +15,8 @@ import {
 } from "./postgres";
 
 // The items queries against PostgreSQL as the app role, ported from template-go-nextjs httpapi/items_test.go
-// (560106d); docs/plans/2026-11-03-nextjs-template/items-parity.md maps each Go test. Viewers come from real
-// sign-ups, the only way to get one. Actions and pages are step 3b.
+// (560106d). Viewers come from real sign-ups, the only way to get one. The actions and pages are tested in
+// pages.test.ts and actions.test.ts.
 
 let database: TestDatabase;
 let db: Database;

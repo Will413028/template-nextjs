@@ -28,8 +28,6 @@ SUPPRESSIONS = {
     # migrations: squawk's per-statement ignore (an excluded rule belongs in .squawk.toml, a gate file)
     "sql": (re.compile(r"squawk-ignore"), (".sql",)),
 }
-# The step 0 spike sources are a frozen record, not code this repository builds or checks.
-EXCLUDED_PREFIXES = ("docs/plans/",)
 
 
 def count_suppressions(language: str) -> int:
@@ -37,7 +35,7 @@ def count_suppressions(language: str) -> int:
     files = subprocess.run(["git", "ls-files", "-z"], check=True, capture_output=True, text=True).stdout.split("\0")
     total = 0
     for name in files:
-        if not name.endswith(suffixes) or name.startswith(EXCLUDED_PREFIXES) or name == "scripts/check_locks.py":
+        if not name.endswith(suffixes) or name == "scripts/check_locks.py":
             continue
         path = pathlib.Path(name)
         if path.is_file():

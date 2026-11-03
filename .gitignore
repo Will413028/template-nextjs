@@ -6,8 +6,10 @@ AGENTS.local.md
 .env.*
 !.env-example
 .secrets/
+# >>> template-only
 # Throwaway passwords the step 0 spikes generated
 docs/plans/**/secrets/
+# <<< template-only
 
 # Dependencies and build output
 node_modules/

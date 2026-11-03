@@ -128,8 +128,8 @@ describe("a TRUSTED_PROXIES that does not parse", () => {
   });
 });
 
-// The items pages and their forms (plan step 3b), ported from template-go-nextjs httpapi/items_test.go where Go
-// tested what a page or a form now does (docs/plans/2026-11-03-nextjs-template/items-parity.md). The forms are posted
+// The items pages and their forms, ported from template-go-nextjs httpapi/items_test.go where Go tested what a page
+// or a form now does. The forms are posted
 // as FormData, the way the browser posts them; test/integration/items.test.ts covers the queries case by case.
 describe("the items pages", () => {
   const hex = () => randomBytes(4).toString("hex");
