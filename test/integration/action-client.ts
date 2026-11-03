@@ -4,7 +4,15 @@ import { readFileSync } from "node:fs";
 // way React's client sends one, cookies carried by hand, the action's result decoded from the RSC response.
 
 type Manifest = {
-  node: Record<string, { filename?: string; exportedName?: string }>;
+  node: Record<
+    string,
+    {
+      filename?: string;
+      exportedName?: string;
+      // the pages whose bundles hold the action, as "app/[locale]/(app)/items/page"
+      workers?: Record<string, unknown>;
+    }
+  >;
 };
 
 // "<file>#<export>" for every action in the build. Ids change with every build, so they come from the build tested.
@@ -30,6 +38,36 @@ export function actionId(ids: Record<string, string>, name: string): string {
     throw new Error(`${found.length} actions named ${name} in the build`);
   }
   return entry[1];
+}
+
+// For each action ("<file>#<export>"), the path of a page whose bundle holds it. React posts an action to the page it
+// was rendered on, which always bundles it; posted to a page that does not, Next.js forwards the request to one that
+// does, and the response no longer carries the action's result (CI run 41673946563: undefined, next 16.4.3).
+export function actionPages(nextDir = ".next"): Record<string, string> {
+  const manifest = JSON.parse(
+    readFileSync(`${nextDir}/server/server-reference-manifest.json`, "utf8"),
+  ) as Manifest;
+  return Object.fromEntries(
+    Object.values(manifest.node).map((entry) => {
+      // a page with no dynamic segment but the locale: "app/[locale]/(app)/items/page" is /en/items
+      const worker = Object.keys(entry.workers ?? {}).find(
+        (page) => !page.replaceAll("[locale]", "").includes("["),
+      );
+      if (!worker) {
+        throw new Error(
+          `no page bundles ${entry.filename}#${entry.exportedName}`,
+        );
+      }
+      const path = worker
+        .replace(/^app\//, "")
+        .replace(/\/page$/, "")
+        .split("/")
+        .filter((segment) => !/^\(.+\)$/.test(segment))
+        .map((segment) => (segment === "[locale]" ? "en" : segment))
+        .join("/");
+      return [`${entry.filename}#${entry.exportedName}`, `/${path}`];
+    }),
+  );
 }
 
 export type ActionResponse = {
