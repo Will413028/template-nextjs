@@ -28,7 +28,10 @@ const KEY = Symbol.for("features.auth.runtime");
 const store = globalThis as unknown as Record<symbol, Runtime | undefined>;
 
 function create(): Runtime {
+  // Configuration first: a bad value throws before anything starts, so a retry leaves nothing behind.
   const config = authConfig();
+  const trusted = config.trustedProxies.map(parsePrefix);
+  const limiter = new IPLimiter(config.rateLimitPerMinute, Date.now);
   const service = createAuthService({ db: db() });
   // Expired sessions and day-old sign-in counts; unref, so the timer never keeps the process up.
   setInterval(() => {
@@ -39,12 +42,7 @@ function create(): Runtime {
       )
       .catch((error) => console.error("auth cleanup failed", error));
   }, HOUR).unref();
-  return {
-    service,
-    limiter: new IPLimiter(config.rateLimitPerMinute, Date.now),
-    // a bad prefix throws here, on the first request that needs it
-    trusted: config.trustedProxies.map(parsePrefix),
-  };
+  return { service, limiter, trusted };
 }
 
 function runtime(): Runtime {
@@ -55,6 +53,10 @@ function runtime(): Runtime {
 export const authService = () => runtime().service;
 
 // The client's limitKey: the TCP peer, or behind a trusted proxy the address it forwarded (client-ip.ts).
+// An action posted to a page that does not bundle it is forwarded by Next.js to itself over loopback, so its peer is
+// 127.0.0.1: such requests share one key, which only limits them harder. Never list loopback in TRUSTED_PROXIES, or
+// a forwarded request's X-Forwarded-For would be believed with the real peer gone. The app's own forms post to the
+// page that bundles the action and are never forwarded.
 export async function clientSource(): Promise<string> {
   const h = await headers();
   const peer = h.get(PEER_HEADER);
