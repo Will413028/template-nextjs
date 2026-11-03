@@ -13,8 +13,16 @@ export default async function SettingsPage() {
   const sessions = await listSessions(viewer);
   const t = await getTranslations("settings");
   const format = await getFormatter();
+  // the zone's name is shown: it is the one src/i18n/request.ts sets, not necessarily the reader's
   const when = (at: Date) =>
-    format.dateTime(at, { dateStyle: "medium", timeStyle: "short" });
+    format.dateTime(at, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
   return (
     <div className="flex flex-col gap-10">
       <h1 className="font-medium text-2xl">{t("title")}</h1>
