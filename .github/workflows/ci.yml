@@ -102,8 +102,7 @@ jobs:
         working-directory: ${{ runner.temp }}/ci-probe
         run: |
           test "$(git rev-list --count HEAD)" = 1
-          test "$(git branch --show-current)" = dev
-          test "$(git rev-parse main)" = "$(git rev-parse dev)"
+          test "$(git branch --format='%(refname:short)')" = main
           test -z "$(git remote)"
           test -z "$(git status --porcelain)"
           python3 scripts/check_commit_policy.py --range HEAD

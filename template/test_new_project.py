@@ -55,7 +55,6 @@ BASE_FILES = {
     "template/new_project.py": "# the generator\n",
     "docs/plans/plan.md": f"{NAME} plan\n",
     ".github/workflows/ci.yml": "jobs:\n  app: {}\n  # >>> template-only\n  generate: {}\n  # <<< template-only\n",
-    f"{NAME}.txt": "a file named after the template\n",
 }
 
 
@@ -65,11 +64,11 @@ class GenerateTest(unittest.TestCase):
         self.root = pathlib.Path(self.tmp.name)
         self.env = mock.patch.dict(os.environ, GIT_ENV)
         self.env.start()
-        self.umask = os.umask(0o022)
+        self.old_umask = os.umask(0o022)
 
     def tearDown(self):
         self.env.stop()
-        os.umask(self.umask)
+        os.umask(self.old_umask)
         self.tmp.cleanup()
 
     def generate(self, files=None, name="my-app", repo=None, dest=None):
@@ -85,7 +84,10 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual(self.read(dest, "package.json"), '{"name": "my-app"}\n')
         self.assertIn("github.com/acme/my-app/security", self.read(dest, "SECURITY.md"))
         self.assertEqual(self.read(dest, "docker-compose.yml"), "POSTGRES_DB: my_app\nAPP_USER: my_app_app\n")
-        self.assertTrue((dest / "my-app.txt").exists())
+
+    def test_a_path_naming_the_template_writes_nothing(self):
+        # file names are not rewritten: a name that would need it is refused instead of renamed
+        self.assert_refused_and_untouched(files={**BASE_FILES, f"{NAME}.txt": "named after the template\n"})
 
     def test_a_repository_that_names_the_project_is_replaced_once(self):
         # sequential str.replace rewrote acme/<name>-fork a second time; one pass never rescans its output
@@ -102,9 +104,10 @@ class GenerateTest(unittest.TestCase):
     def test_starts_a_new_repository_with_one_commit_and_no_remote(self):
         src, dest, _ = self.generate()
         self.assertEqual(git(dest, "rev-list", "--count", "HEAD").strip(), "1")
-        self.assertEqual(git(dest, "branch", "--show-current").strip(), "dev")
-        self.assertEqual(git(dest, "rev-parse", "main"), git(dest, "rev-parse", "dev"))
-        self.assertEqual(oct(dest.stat().st_mode & 0o777), oct(0o777 & ~self.umask))
+        # one branch; the branch model is set up on the hosting side after the first push
+        self.assertEqual(git(dest, "branch", "--format=%(refname:short)").split(), ["main"])
+        self.assertEqual(oct(dest.stat().st_mode & 0o777), oct(0o755))
+        self.assertEqual(oct((dest / "package.json").stat().st_mode & 0o777), oct(0o644))
         self.assertEqual(git(dest, "remote").strip(), "")
         self.assertEqual(git(dest, "status", "--porcelain"), "")
         sha = git(src, "rev-parse", "HEAD").strip()
@@ -181,25 +184,39 @@ class GenerateTest(unittest.TestCase):
             new_project.generate(src, self.root / "out", "my-app", "acme/my-app")
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
 
-    def test_two_files_mapping_to_one_path_writes_nothing(self):
-        self.assert_refused_and_untouched(files={**BASE_FILES, "my-app.txt": "already named\n"})
+    def test_output_referring_to_an_excluded_directory_writes_nothing(self):
+        self.assert_refused_and_untouched(files={**BASE_FILES, "notes.md": "see `docs/plans/` and template/README.md\n"})
+
+    def test_a_symlink_leaving_the_tree_writes_nothing(self):
+        src = make_template(self.root, BASE_FILES)
+        (src / "escape").symlink_to("/etc/hosts")
+        git(src, "add", "escape")
+        git(src, "commit", "-q", "-m", "link")
+        with self.assertRaises(new_project.GenerateError):
+            new_project.generate(src, self.root / "out", "my-app", "acme/my-app")
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
 
     def test_a_failed_move_gives_back_the_empty_destination(self):
         dest = self.root / "out"
         dest.mkdir()
         src = make_template(self.root, BASE_FILES)
-        with mock.patch.object(new_project.os, "rename", side_effect=OSError("busy")), self.assertRaises(OSError):
+        # an OSError (EBUSY on a mount point, a permission) is reported as an error, not a traceback
+        with mock.patch.object(new_project.os, "rename", side_effect=OSError("busy")), \
+                self.assertRaisesRegex(new_project.GenerateError, "busy"):
             new_project.generate(src, dest, "my-app", "acme/my-app")
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["out", "src"])
         self.assertEqual(list(dest.iterdir()), [])
 
     def test_other_paths_under_a_template_directory_are_allowed(self):
-        _, dest, _ = self.generate(files={**BASE_FILES, "src/mail/template/x.ts": "// a mail template/ dir\n"})
+        _, dest, _ = self.generate(files={**BASE_FILES, "src/mail/template/x.ts": 'import "./template/body";\n'})
         self.assertTrue((dest / "src/mail/template/x.ts").exists())
+
+    def test_the_longest_name_still_fits_postgres(self):
+        new_project.check_arguments("a" * 57, "acme/x")  # a57_owner is 63 bytes, PostgreSQL's limit
 
     def test_refuses_bad_names_and_repositories(self):
         for name, repo in (("My-App", "acme/x"), ("my_app", "acme/x"), ("1app", "acme/x"), (NAME, "acme/x"),
-                           ("a" * 51, "acme/x"), ("my-app", "acme"), ("my-app", "acme/x/y"), ("my-app", "acme/x y")):
+                           ("a" * 58, "acme/x"), ("my-app", "acme"), ("my-app", "acme/x/y"), ("my-app", "acme/x y")):
             with self.subTest(name=name, repo=repo):
                 with self.assertRaises(new_project.GenerateError):
                     new_project.check_arguments(name, repo)
@@ -211,9 +228,11 @@ class TemplateRepositoryTest(unittest.TestCase):
     def test_the_real_template_generates_cleanly(self):
         # computes (never writes) the output of this checkout's HEAD: every check except the clean-tree one
         top = SCRIPT.parent.parent
-        files = new_project.build_output(new_project.read_template(top), "my-app", "acme/my-app")
-        self.assertIn("package.json", files)
-        self.assertNotIn("template/new_project.py", files)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = pathlib.Path(tmp) / "project"
+            new_project.materialize(top, out, "my-app", "acme/my-app")
+            self.assertTrue((out / "package.json").is_file())
+            self.assertFalse((out / "template").exists())
 
 
 if __name__ == "__main__":

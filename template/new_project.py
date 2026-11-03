@@ -3,49 +3,55 @@
 
 Usage: python3 template/new_project.py <name> <dest> [--repo <owner/name>]   (make new NAME=... DEST=... [REPO=...])
 
-The template stays a project that runs as it is. This copies the files of its HEAD commit (never the working tree,
-which must be clean) into <dest>: every token in TOKENS is replaced in one pass over contents and file names, the
-paths in EXCLUDED are left out, files under template/derived/ replace their counterparts, and the lines between a
-`>>> template-only` and a `<<< template-only` marker are dropped. The whole output is computed and checked in memory
-first (no template name, no reference to the template-only parts); only then is it written, `git init`ed and
-committed in a temporary directory next to <dest> and moved into place, so a failure leaves nothing behind. The new
-repository has no remote and no link to the template: later template fixes do not reach it.
+The template stays a project that runs as it is. Its HEAD commit (never the working tree, which must be clean) is
+exported with `git archive`, leaving out the paths in EXCLUDED, and unpacked with tarfile's "data" filter into a
+temporary directory next to <dest>, the way create-next-app unpacks an example. There, files under template/derived/
+replace their counterparts, the lines between a `>>> template-only` and a `<<< template-only` marker are dropped, and
+every token in TOKENS is replaced in one pass over file contents (file names are not rewritten: a path holding a token
+is refused). The tree is then checked: nothing may still name the template, refer to an excluded path or hold a
+marker. Only a clean tree is committed (`git init -b main`, one commit, no remote) and moved onto <dest>, so a failure
+leaves nothing behind. The branch model and branch protection are set up on the hosting side after the first push.
+The new project has no link to the template: later template fixes do not reach it.
 """
 
 import argparse
+import io
 import os
 import pathlib
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 
 OLD_NAME = "template-nextjs"
 OLD_DB = OLD_NAME.replace("-", "_")
 OLD_REPO = f"Will413028/{OLD_NAME}"
 DEFAULT_OWNER = "Will413028"
-# Paths (prefixes) that are never copied: the generator and its tests, the derived files' sources, the plans.
+# Paths (prefixes) the export leaves out: the generator, its tests and the derived files' sources; the plans.
 EXCLUDED = ("template/", "docs/plans/")
 # template/derived/<path> replaces <path> in the output.
 DERIVED = "template/derived/"
-BEGIN, END = b">>> template-only", b"<<< template-only"
-# Any of these in the output means a template-only part leaked into it.
-FORBIDDEN = re.compile(
-    rb"template[-_]nextjs|template/(?:derived|new_project|test_new_project)|new_project|docs/plans|make new\b|" + re.escape(BEGIN) + b"|" + re.escape(END),
-    re.IGNORECASE,
-)
-# PostgreSQL truncates identifiers at 63 bytes; the longest role is <name>_owner
-MAX_NAME = 50
+BEGIN, END = ">>> template-only", "<<< template-only"
+# PostgreSQL truncates identifiers at 63 bytes; the longest one made from the name is the role <name>_owner.
+MAX_NAME = 63 - len("_owner")
 NAME_PATTERN = re.compile(r"[a-z](?:[a-z0-9-]*[a-z0-9])?")
 REPO_PATTERN = re.compile(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+")
+# What the output must not hold, derived from the tables above: a template name in any case, a reference to an
+# excluded path (at a path boundary, so src/mail/template/ is fine), a marker.
+FORBIDDEN = re.compile(
+    "|".join(
+        [re.escape(token) for token in (OLD_REPO, OLD_DB, OLD_NAME)]
+        + [r"(?<![\w./-])" + re.escape(prefix) for prefix in EXCLUDED]
+        + [re.escape(BEGIN), re.escape(END)]
+    ),
+    re.IGNORECASE,
+)
 
 
 class GenerateError(Exception):
     pass
-
-
-Template = tuple[str, dict[str, tuple[str, bytes]]]  # (commit sha, path -> (git mode, contents))
 
 
 def run_git(cwd: pathlib.Path, *args: str, stdin: bytes | None = None) -> bytes:
@@ -66,37 +72,7 @@ def check_arguments(name: str, repo: str) -> None:
         raise GenerateError(f"invalid repository {repo!r}: use owner/name")
 
 
-def read_template(top: pathlib.Path) -> Template:
-    """The files of HEAD, read from git objects. A git failure is an error, never an empty template."""
-    sha = run_git(top, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
-    entries = run_git(top, "ls-tree", "-r", "-z", "--full-tree", sha).split(b"\0")
-    listed = []
-    for entry in filter(None, entries):
-        meta, path = entry.split(b"\t", 1)
-        mode, kind, obj = meta.decode().split()
-        if kind != "blob" or mode not in ("100644", "100755"):
-            raise GenerateError(f"{path.decode()}: unsupported entry {mode} {kind} (only regular files are copied)")
-        rel = path.decode()
-        if not rel.startswith(EXCLUDED) or rel.startswith(DERIVED):  # never read what is left out
-            listed.append((rel, mode, obj))
-    blobs = run_git(top, "cat-file", "--batch", stdin="".join(f"{obj}\n" for _, _, obj in listed).encode())
-    files: dict[str, tuple[str, bytes]] = {}
-    offset = 0
-    for path, mode, obj in listed:
-        header_end = blobs.index(b"\n", offset)
-        header = blobs[offset:header_end].split()  # <sha> blob <size>
-        if header[:2] != [obj.encode(), b"blob"]:
-            raise GenerateError(f"git cat-file returned {header!r} for {path}")
-        start = header_end + 1
-        size = int(header[2])
-        files[path] = (mode, blobs[start:start + size])
-        offset = start + size + 1
-    if "package.json" not in files:
-        raise GenerateError(f"{top} does not look like the template: no package.json at HEAD")
-    return sha, files
-
-
-def drop_template_only(path: str, text: bytes) -> bytes:
+def drop_template_only(path: str, text: str) -> str:
     kept, inside = [], False
     for number, line in enumerate(text.splitlines(keepends=True), 1):
         if BEGIN in line or END in line:
@@ -107,43 +83,49 @@ def drop_template_only(path: str, text: bytes) -> bytes:
             kept.append(line)
     if inside:
         raise GenerateError(f"{path}: template-only block is never closed")
-    return b"".join(kept)
+    return "".join(kept)
 
 
-def build_output(template: Template, name: str, repo: str) -> dict[str, tuple[str, bytes]]:
-    """Every output file computed and checked in memory; raises GenerateError instead of returning a bad tree."""
-    _, files = template
+def materialize(top: pathlib.Path, out: pathlib.Path, name: str, repo: str) -> str:
+    """Write the checked output tree of top's HEAD to out (which must not exist). Returns the template commit."""
+    sha = run_git(top, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
+    # tar.umask=user: the archive's modes follow the user's umask, as files they created would
+    archive = run_git(top, "-c", "tar.umask=user", "archive", "--format=tar", sha, "--", ".",
+                      *(f":!{prefix}" for prefix in EXCLUDED))
+    out.mkdir()
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+            tar.extractall(out, filter="data")  # refuses absolute links and links leaving the tree
+    except tarfile.FilterError as error:
+        raise GenerateError(f"the template holds an entry the export refuses: {error}") from error
+    if not (out / "package.json").is_file():
+        raise GenerateError(f"{top} does not look like the template: no package.json at HEAD")
+    for path in run_git(top, "ls-tree", "-r", "-z", "--name-only", sha, "--", DERIVED).decode().split("\0"):
+        if path:
+            (out / path[len(DERIVED):]).write_bytes(run_git(top, "show", f"{sha}:{path}"))
+
     table = {OLD_REPO: repo, OLD_DB: name.replace("-", "_"), OLD_NAME: name}
     # one pass, longest token first: a replacement is never scanned again, so a repository may contain the name
     pattern = re.compile("|".join(re.escape(t) for t in sorted(table, key=len, reverse=True)))
-
-    def replace(text: str) -> str:
-        return pattern.sub(lambda m: table[m.group(0)], text)
-
-    sources = {p: v for p, v in files.items() if not p.startswith(EXCLUDED)}
-    sources.update({p[len(DERIVED):]: v for p, v in files.items() if p.startswith(DERIVED)})
-    output: dict[str, tuple[str, bytes]] = {}
     problems: list[str] = []
-    for path, (mode, data) in sorted(sources.items()):
+    for file in sorted(p for p in out.rglob("*") if p.is_file() and not p.is_symlink()):
+        rel = file.relative_to(out).as_posix()
+        problems += [f"{rel}: the path holds {m.group(0)!r} (file names are not rewritten)"
+                     for m in FORBIDDEN.finditer(rel)]
+        data = file.read_bytes()
         try:
-            text: str | None = drop_template_only(path, data).decode("utf-8")
-        except UnicodeDecodeError:  # binary: copied as it is, still checked below
-            text = None
-        if text is not None:
-            data = replace(text).encode("utf-8")
-        out = replace(path)
-        if out in output:
-            problems.append(f"{out}: two template files map to this path")
-        output[out] = (mode, data)
-        if out.startswith(EXCLUDED):
-            problems.append(f"{out}: an excluded path is in the output")
+            text = drop_template_only(rel, data.decode("utf-8"))
+        except UnicodeDecodeError:  # binary: kept as it is, still checked
+            problems += [f"{rel}: still contains {m.group(0)!r}" for m in FORBIDDEN.finditer(data.decode("latin-1"))]
+            continue
         # what the output keeps from the template, the replacements blanked out: they may name the project
-        kept = pattern.sub("\0", path + "\n" + (text or "")).encode() + (data if text is None else b"")
-        for found in FORBIDDEN.finditer(kept):
-            problems.append(f"{out}: still contains {found.group(0).decode(errors='replace')!r}")
+        problems += [f"{rel}: still contains {m.group(0)!r}" for m in FORBIDDEN.finditer(pattern.sub("\0", text))]
+        new = pattern.sub(lambda m: table[m.group(0)], text).encode("utf-8")
+        if new != data:
+            file.write_bytes(new)
     if problems:
         raise GenerateError("the output is not clean; nothing was written:\n  " + "\n  ".join(problems))
-    return output
+    return sha
 
 
 def generate(top: pathlib.Path, dest: pathlib.Path, name: str, repo: str) -> str:
@@ -156,43 +138,26 @@ def generate(top: pathlib.Path, dest: pathlib.Path, name: str, repo: str) -> str
         raise GenerateError(f"{dest.parent} does not exist")
     if run_git(top, "status", "--porcelain", "--untracked-files=normal").strip():
         raise GenerateError(f"{top} has uncommitted or untracked files; commit or remove them first")
-    template = read_template(top)
-    output = build_output(template, name, repo)
 
+    # the project is built in a subdirectory: mkdtemp's own directory is 0700, a plain mkdir follows the umask
     work = pathlib.Path(tempfile.mkdtemp(prefix=f".{dest.name}.", dir=dest.parent))
-    umask = os.umask(0)
-    os.umask(umask)
-    work.chmod(0o777 & ~umask)  # mkdtemp makes it 0700; the project directory gets the usual permissions
-    replaced_empty_dest = False
     try:
-        for path, (mode, data) in output.items():
-            target = work / path
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
-            target.chmod(0o755 if mode == "100755" else 0o644)
-        for directory in {p for path in output for p in (work / path).parents if p != work and work in p.parents}:
-            directory.chmod(0o777 & ~umask)
-        run_git(work, "init", "-q", "-b", "main")
-        run_git(work, "add", "-A")
+        out = work / "project"
+        sha = materialize(top, out, name, repo)
+        run_git(out, "init", "-q", "-b", "main")
+        run_git(out, "add", "-A")
         message = (
             f"chore: start {name} from the template\n\n"
             f"Quality-Gate: initial commit adds every checker's configuration\n"
-            f"Large-Change: initial commit generated from {OLD_NAME}@{template[0]}\n"
+            f"Large-Change: initial commit generated from {OLD_NAME}@{sha}\n"
         )
-        run_git(work, "commit", "-q", "-F", "-", stdin=message.encode())
-        # the project's branch model: daily work on dev, main only through a dev -> main pull request
-        run_git(work, "branch", "dev")
-        run_git(work, "switch", "-q", "dev")
-        if dest.exists():
-            dest.rmdir()  # empty, checked above
-            replaced_empty_dest = True
-        os.rename(work, dest)
-    except BaseException:
+        run_git(out, "commit", "-q", "-F", "-", stdin=message.encode())
+        os.rename(out, dest)  # same filesystem; replaces an empty dest in one step
+    except OSError as error:
+        raise GenerateError(f"could not create {dest}: {error}") from error
+    finally:
         shutil.rmtree(work, ignore_errors=True)
-        if replaced_empty_dest and not dest.exists():
-            dest.mkdir()  # give back the empty directory the user made
-        raise
-    return template[0]
+    return sha
 
 
 def main() -> int:
@@ -207,8 +172,8 @@ def main() -> int:
     except GenerateError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    print(f"Created {args.dest} from {OLD_NAME}@{sha[:12]} (one commit on main and dev, dev checked out, no remote).")
-    print(f"Next: cd {args.dest} && pnpm install && make init-env")
+    print(f"Created {args.dest} from {OLD_NAME}@{sha[:12]} (one commit on main, no remote).")
+    print(f"Next: cd {args.dest} && pnpm install && make init-env; see README.md for the first push")
     return 0
 
 
