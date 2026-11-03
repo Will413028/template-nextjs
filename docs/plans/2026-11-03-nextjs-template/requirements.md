@@ -13,7 +13,7 @@
 | U1 | 行銷首頁 `(marketing)` | S3 推論 | 1 | 未開始 |
 | U2 | 註冊、登入 `(auth)/register`、`(auth)/login` | S3 推論 | 2 | 完成 |
 | U3 | dashboard overview、settings（含登入中裝置列表與撤銷） | S3 推論 | 2 | 完成 |
-| U4 | items 列表與編輯（Go 版前端沒有 items 畫面，只有 API） | 推論 | 3（依 D4） | 未開始 |
+| U4 | items 列表與編輯（Go 版前端沒有 items 畫面，只有 API） | 推論 | 3（依 D4） | 完成 |
 | U5 | admin 使用者管理畫面（Go 版沒有這個畫面） | 推論 | — | 不做 |
 | U6 | i18n（en、zh-TW，next-intl）、CSP nonce、錯誤頁 | S3 推論 | 1 | 未開始 |
 
@@ -23,7 +23,7 @@
 |---|---|---|---|
 | E1 | users | S3 推論 | 2 | 完成 |
 | E2 | sessions | S3 推論 | 2（D2：自建） | 完成 |
-| E3 | items | S3 推論 | 3 | 未開始 |
+| E3 | items | S3 推論 | 3 | 完成 |
 | E4 | sign_in_throttles、trusted_devices、audit_events | S3 推論 | 4（依 D4） | 延後 |
 
 ## 流程（來源 S3，推論）
@@ -32,7 +32,7 @@
 |---|---|---|---|
 | F1 | 註冊 → 登入 → 讀自己 → 登出 | 2 | 完成 |
 | F2 | 撤銷其他 session、刪除帳號 | 2 | 完成 |
-| F3 | items 建立、列表（keyset 分頁）、修改、刪除，只能存取自己的 | 3 | 未開始 |
+| F3 | items 建立、列表（keyset 分頁）、修改、刪除，只能存取自己的 | 3 | 完成 |
 | F4 | 依帳號節流、登入鎖定、trusted device、HIBP 密碼檢查、稽核紀錄 | 4（依 D4） | 延後 |
 | F5 | admin：列出、停用、刪除使用者，解除鎖定；`recover-admin` 命令 | 4（依 D4） | 延後 |
 | F6 | `make rename NAME=x` 產生衍生專案 | 5 | 未開始 |
