@@ -1,0 +1,13 @@
+# Lock and safety checks for migrations/*.sql (pnpm check:migrations). Drizzle's migrator applies every pending file
+# in one transaction (scripts/migrate.mts), so assume_in_transaction: CREATE INDEX CONCURRENTLY fails there.
+assume_in_transaction = true
+pg_version = "18.0"
+excluded_rules = [
+  # scripts/migrate.mts sets lock_timeout on the connection, not with SET in each file.
+  "require-lock-timeout",
+  # No statement timeout for migrations.
+  "require-statement-timeout",
+  # Every pending file runs in one transaction recorded in drizzle.__drizzle_migrations, so it is never partly
+  # applied and rerun.
+  "prefer-robust-stmts",
+]
