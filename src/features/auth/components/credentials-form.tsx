@@ -25,6 +25,8 @@ export function CredentialsForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 
   const failure = state && !state.ok ? state : null;
   const fields = failure && "fields" in failure ? failure.fields : undefined;
+  // a failure no field shows (an empty fields, or none) is said above the button
+  const shownByField = Boolean(fields?.username || fields?.password);
   const signingUp = mode === "sign-up";
 
   return (
@@ -44,7 +46,7 @@ export function CredentialsForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         error={fields?.password}
         autoComplete={signingUp ? "new-password" : "current-password"}
       />
-      {failure && !fields && (
+      {failure && !shownByField && (
         <p role="alert" className="text-danger text-sm">
           {failureMessage(failure)}
         </p>

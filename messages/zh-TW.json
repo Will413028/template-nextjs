@@ -31,7 +31,7 @@
     "hasAccount": "已經有帳號？",
     "signOut": "登出",
     "signOutEverywhere": "登出所有裝置",
-    "revokeSession": "登出",
+    "revokeSession": "登出這個裝置",
     "errors": {
       "invalid_input": "部分欄位不正確。",
       "invalid_credentials": "使用者名稱或密碼錯誤。",

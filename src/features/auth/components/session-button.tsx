@@ -22,11 +22,14 @@ export function SessionButton({
   sessionId,
   endsSession,
   variant = "secondary",
+  describedBy,
 }: {
   action: keyof typeof ACTIONS;
   sessionId?: string;
   endsSession?: boolean;
   variant?: keyof typeof VARIANTS;
+  // the id of the text that says what the button acts on (a session's row), for screen readers
+  describedBy?: string;
 }) {
   const t = useTranslations("auth");
   const failureMessage = useFailureMessage();
@@ -47,7 +50,12 @@ export function SessionButton({
   return (
     <form action={run} className="flex items-center gap-3">
       {sessionId && <input type="hidden" name="id" value={sessionId} />}
-      <button type="submit" disabled={pending} className={VARIANTS[variant]}>
+      <button
+        type="submit"
+        disabled={pending}
+        aria-describedby={describedBy}
+        className={VARIANTS[variant]}
+      >
         {t(action)}
       </button>
       {state && !state.ok && (

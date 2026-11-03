@@ -9,7 +9,8 @@ import { useFailureMessage } from "./use-failure-message";
 type State = Awaited<ReturnType<typeof deleteAccount>> | null;
 
 // Deletes the account after the user ticks that they understand. The server needs a session issued within ten
-// minutes; past that the form says so and links to the sign-in page.
+// minutes; past that the form says so and links to the sign-in page. A session that ended meanwhile (unauthenticated,
+// or session_invalid when it ended between the check and the delete) goes to the sign-in page.
 export function DeleteAccountForm() {
   const t = useTranslations("settings");
   const failureMessage = useFailureMessage();
@@ -19,7 +20,11 @@ export function DeleteAccountForm() {
     null,
   );
   useEffect(() => {
-    if (state?.ok || (state && state.code === "unauthenticated")) {
+    if (
+      state?.ok ||
+      state?.code === "unauthenticated" ||
+      state?.code === "session_invalid"
+    ) {
       router.push("/sign-in");
     }
   }, [state, router]);

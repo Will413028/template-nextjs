@@ -31,7 +31,7 @@
     "hasAccount": "Already have an account?",
     "signOut": "Sign out",
     "signOutEverywhere": "Sign out everywhere",
-    "revokeSession": "Sign out",
+    "revokeSession": "Sign out this device",
     "errors": {
       "invalid_input": "Some fields are invalid.",
       "invalid_credentials": "Incorrect username or password.",
