@@ -1,0 +1,11 @@
+# Go template's deploy/Caddyfile minus the backend: there is one upstream, so /api needs no separate handle.
+{$SITE_ADDRESS::80} {
+	log
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	reverse_proxy app:3000 {
+		lb_try_duration 10s
+		# Next has no TRUSTED_PROXIES concept for X-Request-ID; still overwrite the client's value.
+		header_up X-Request-ID {http.request.uuid}
+	}
+}

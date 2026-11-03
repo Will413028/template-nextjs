@@ -1,0 +1,29 @@
+# Personal, host-specific agent context (never tracked)
+AGENTS.local.md
+
+# Local configuration and password files (make init-env)
+.env
+.secrets/
+# Throwaway passwords the step 0 spikes generated
+docs/plans/**/secrets/
+
+# Dependencies and build output
+node_modules/
+.next/
+out/
+build/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Reports read by scripts/check_locks.py
+test-report.json
+
+# Pinned release binaries (Makefile)
+/bin/
+
+.DS_Store
+__pycache__/
+*.pem
+npm-debug.log*
+.pnpm-debug.log*

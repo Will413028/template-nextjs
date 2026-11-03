@@ -1,0 +1,50 @@
+// Go template's users/items/sessions in Prisma 7 schema language.
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model User {
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  account      String    @unique(map: "users_account_key")
+  passwordHash String    @map("password_hash")
+  role         String    @default("user") // text + CHECK in Go; a Prisma enum would create a PG enum type instead
+  isDisabled   Boolean   @default(false) @map("is_disabled")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  items        Item[]
+  sessions     Session[]
+
+  @@map("users")
+}
+
+model Item {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  title       String
+  description String?
+  ownerId     String   @map("owner_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "items_owner_id_fkey")
+
+  @@index([ownerId, id(sort: Desc)], map: "items_owner_id_id_idx")
+  @@map("items")
+}
+
+model Session {
+  tokenHash  Bytes    @id @map("token_hash")
+  id         String   @unique(map: "sessions_id_key") @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  createdAt  DateTime @map("created_at") @db.Timestamptz(6)
+  lastUsedAt DateTime @map("last_used_at") @db.Timestamptz(6)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "sessions_user_id_fkey")
+
+  @@index([userId, id(sort: Desc)], map: "sessions_user_id_id_idx")
+  @@map("sessions")
+}

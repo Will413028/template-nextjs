@@ -1,0 +1,100 @@
+{
+  "node": {
+    "00ecc57b082678f49c179a917b890c8c2f9d534c40": {
+      "workers": {
+        "app/page": {
+          "moduleId": 91558,
+          "async": false
+        }
+      },
+      "filename": "app/page.tsx",
+      "exportedName": "$$RSC_SERVER_ACTION_0"
+    },
+    "40687e07ca4237bf1f3aa329264d58048aa8378c11": {
+      "workers": {
+        "app/page": {
+          "moduleId": 91558,
+          "async": false
+        },
+        "app/protected/page": {
+          "moduleId": 95547,
+          "async": false
+        }
+      },
+      "filename": "app/shared-actions.ts",
+      "exportedName": "sharedUnguarded"
+    },
+    "005c491d3ca490def2a7260c9024b35e977a8e9e68": {
+      "workers": {
+        "app/page": {
+          "moduleId": 91558,
+          "async": false
+        }
+      },
+      "filename": "app/actions.ts",
+      "exportedName": "whoami"
+    },
+    "00b2c1f628a80b3e0d4bf6ad41bc7f5fa51c3ffb2b": {
+      "workers": {
+        "app/page": {
+          "moduleId": 91558,
+          "async": false
+        }
+      },
+      "filename": "app/actions.ts",
+      "exportedName": "argonInfo"
+    },
+    "40156c047a9591f3dc62ce4f2a3837d7d2828756c3": {
+      "workers": {
+        "app/page": {
+          "moduleId": 91558,
+          "async": false
+        }
+      },
+      "filename": "app/actions.ts",
+      "exportedName": "ping"
+    },
+    "60a6b98de1a8606a6d8d4b402d4e417374af9db663": {
+      "workers": {
+        "app/page": {
+          "moduleId": 91558,
+          "async": false
+        }
+      },
+      "filename": "app/actions.ts",
+      "exportedName": "signIn"
+    },
+    "60fd5ab420e8fefada96630862f4310dae345a9163": {
+      "workers": {
+        "app/page": {
+          "moduleId": 91558,
+          "async": false
+        }
+      },
+      "filename": "app/actions.ts",
+      "exportedName": "signUp"
+    },
+    "404cd13fa828545dc1ce9c7f6951cc0d4feae1457f": {
+      "workers": {
+        "app/protected/page": {
+          "moduleId": 95547,
+          "async": false
+        }
+      },
+      "filename": "app/protected/actions.ts",
+      "exportedName": "protectedUnguarded"
+    },
+    "409a6600c156daa8d53e8268923c0e53390a1020fe": {
+      "workers": {
+        "app/protected/page": {
+          "moduleId": 95547,
+          "async": false
+        }
+      },
+      "filename": "app/protected/actions.ts",
+      "exportedName": "protectedGuarded"
+    }
+  },
+  "edge": {},
+  "encryptionKey": "<redacted: throwaway spike build>"
+}

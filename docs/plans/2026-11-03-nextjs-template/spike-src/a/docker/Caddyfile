@@ -1,0 +1,7 @@
+# Mirrors template-go-nextjs deploy/Caddyfile's frontend route (no /api backend in the Next-only template).
+:80 {
+	log
+	reverse_proxy spike-a-next:3000 {
+		lb_try_duration 10s
+	}
+}
