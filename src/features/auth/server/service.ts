@@ -252,7 +252,7 @@ export function createAuthService(options: AuthServiceOptions) {
         });
         return { ok: false, code: "invalid_credentials" };
       }
-      throttle.succeeded(username);
+      throttle.succeeded(username, client.source);
       const issued = await db.transaction(async (tx) => {
         if (client.previousToken) {
           await tx

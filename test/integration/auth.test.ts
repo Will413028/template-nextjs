@@ -275,7 +275,7 @@ describe("sign-in", () => {
 
 describe("sign-in throttling", () => {
   it("throttles a username from one source after five failures, not the owner elsewhere", async () => {
-    const { auth, signUp } = setup();
+    const { auth, signUp, advance } = setup();
     const username = name("frank");
     await signUp(username);
     const attempt = (source: string, password = "not the password") =>
@@ -306,7 +306,11 @@ describe("sign-in throttling", () => {
     ).toEqual({ ok: false, code: "login_throttled", retryAfterSeconds: 60 });
     // another client is not locked out by these failures
     expect((await attempt("198.51.100.7", PASSWORD)).ok).toBe(true);
-    // a successful sign-in clears the username's counts
+    // which does not reset this source's backoff; once its wait has passed, its own sign-in goes through
+    expect(await attempt(SOURCE, PASSWORD)).toMatchObject({
+      code: "login_throttled",
+    });
+    advance(MINUTE);
     expect((await attempt(SOURCE, PASSWORD)).ok).toBe(true);
   });
 

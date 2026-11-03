@@ -48,15 +48,18 @@ describe("SignInThrottle", () => {
     }
   });
 
-  it("counts each source on its own and clears the username on success", () => {
+  it("counts each source on its own and clears only the source that signed in", () => {
     const throttle = new SignInThrottle(() => 0);
     for (let n = 0; n < 5; n++) throttle.reserve("alice", "192.0.2.1");
     expect(throttle.reserve("alice", "192.0.2.1")).toBeGreaterThan(0);
     // the owner signing in from elsewhere is not locked out by someone else's failures
     expect(throttle.reserve("alice", "198.51.100.7")).toBe(0);
     expect(throttle.reserve("bob", "192.0.2.1")).toBe(0);
-    throttle.succeeded("alice");
-    expect(throttle.reserve("alice", "192.0.2.1")).toBe(0);
+    // and that sign-in does not reset the other source's backoff
+    throttle.succeeded("alice", "198.51.100.7");
+    expect(throttle.reserve("alice", "192.0.2.1")).toBeGreaterThan(0);
+    for (let n = 0; n < 4; n++) throttle.reserve("alice", "198.51.100.7");
+    expect(throttle.reserve("alice", "198.51.100.7")).toBe(0);
   });
 
   it("forgets counts untouched for a day", () => {

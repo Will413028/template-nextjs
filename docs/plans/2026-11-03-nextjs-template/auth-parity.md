@@ -66,7 +66,7 @@
 | TestConcurrentAdminDisableLeavesOne | httpapi/auth_test.go | 沿用 | 4 | |
 | TestNonAdminCannotPatchUser | httpapi/auth_test.go | 沿用 | 4 | |
 | TestUnauthenticatedBeforeValidation | httpapi/auth_test.go | 沿用（每個 action 先 `requireSession()` 再做 zod 驗證） | 2 | |
-| TestLoginThrottlePerAccount | httpapi/auth_test.go | 沿用（記憶體實作，spike §5 已跑出同樣行為；Retry-After 改成 action 回傳的 `retryAfter`） | 2 | `test/integration/auth.test.ts` "throttles a username from one source after five failures, not the owner elsewhere"（action 回傳 `retryAfter` 由 2b 補） |
+| TestLoginThrottlePerAccount | httpapi/auth_test.go | 偏離：登入成功只清該來源的計數（D2 偏離清單第 11 條）；其餘沿用（記憶體實作；`retryAfter` 由 2b 補） | 2 | `test/integration/auth.test.ts` "throttles a username from one source after five failures, not the owner elsewhere"（action 回傳 `retryAfter` 由 2b 補） |
 | TestLoginThrottleConcurrent | httpapi/auth_test.go | 沿用（spike §5：20 個同時送 → 5 個檢查密碼、15 個被節流、只做 5 次雜湊） | 2 | `test/integration/auth.test.ts` "checks five passwords out of twenty concurrent attempts and throttles the rest" |
 | TestRateLimitAuthOperations | httpapi/auth_test.go | 沿用 | 2 | |
 | TestCredentialsNeverLogged | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "logs sign-up, sign-in, failures and sign-out with user ids, never the password, token or unknown username"（action 層與 cookie 值由 2b 補） |
@@ -89,7 +89,7 @@
 | TestRateLimitOnlyNamedOperations | httpapi/ratelimit_test.go | 沿用（只有註冊與登入的 action 受限） | 2 | |
 | TestIPLimiterRefillsAndSweeps | httpapi/ratelimit_test.go | 沿用（spike `test/unit.test.ts` 已移植並通過） | 2 | `src/features/auth/__tests__/throttle.test.ts` "refills a bucket over time and drops buckets idle for a minute" |
 | TestIPLimiterKeysIPv6By64 | httpapi/ratelimit_test.go | 沿用（spike 已移植並通過） | 2 | `src/features/auth/__tests__/throttle.test.ts` "limits an IPv6 /64 as one client" |
-| TestSignInThrottlePerClient | httpapi/throttle_test.go | 沿用（spike §5 實測） | 2 | `src/features/auth/__tests__/throttle.test.ts` "counts each source on its own and clears the username on success"；`test/integration/auth.test.ts` "throttles a username from one source after five failures, not the owner elsewhere" |
+| TestSignInThrottlePerClient | httpapi/throttle_test.go | 偏離：登入成功只清該來源的計數（D2 偏離清單第 11 條）；其餘沿用 | 2 | `src/features/auth/__tests__/throttle.test.ts` "counts each source on its own and clears only the source that signed in"；`test/integration/auth.test.ts` "throttles a username from one source after five failures, not the owner elsewhere" |
 | TestUntrustedClientsLockedTrustedDeviceNot | httpapi/throttle_test.go | 沿用 | 4 | |
 | TestDeviceCookieIsPerAccount | httpapi/throttle_test.go | 沿用 | 4 | |
 | TestSignOutEverywhereForgetsDevices | httpapi/throttle_test.go | 沿用 | 4 | |

@@ -67,7 +67,7 @@ const KEEP_FOR = 24 * 60 * MINUTE;
 // Exponential backoff per username and source (template-go-nextjs ADR account-abuse-and-lifecycle D4a): each source
 // has its own count, so one client's failures do not lock out another. The attempt is counted before the password is
 // checked, so requests sent together cannot all pass a wait that is not recorded yet. From the 5th consecutive
-// failure the next attempt waits 2^(n-5) minutes, at most an hour. A successful sign-in clears the username's counts.
+// failure the next attempt waits 2^(n-5) minutes, at most an hour. A successful sign-in clears its source's count.
 export class SignInThrottle {
   private readonly counts = new Map<
     string,
@@ -96,8 +96,13 @@ export class SignInThrottle {
     return 0;
   }
 
-  succeeded(username: string): void {
-    this.counts.delete(username);
+  // Clears only the source that signed in: clearing the username's every source would let the owner's own sign-ins
+  // reset an attacker's backoff (template-go-nextjs clears them all, alongside an account-wide cap this step defers;
+  // plan D2 deviation 11).
+  succeeded(username: string, source: string): void {
+    const sources = this.counts.get(username);
+    sources?.delete(source);
+    if (sources?.size === 0) this.counts.delete(username);
   }
 
   // Drops counts untouched for a day.

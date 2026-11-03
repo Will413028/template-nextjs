@@ -102,6 +102,7 @@
     8. 慢速標頭攻擊交給 Caddy。
     9. 契約唯一來源從 OpenAPI 改成 zod schema。
     10. migration 工具從 Atlas 改成 Drizzle（D1），角色權限斷言沿用。
+    11. 登入成功只清掉該次登入來源的節流計數，不清該帳號所有來源（Go `ClearLoginThrottles` 全清，搭配步驟 4 才做的帳號層級上限）；否則本人每登入一次，攻擊者的退避就重置（2a code review 提出，Will 2026-11-03 確認）。
 - **D3 對外 API**（狀態：已決 2026-11-03，Will；擋住步驟：1）
   - A：只用 Server Actions 給自己的畫面用，Route Handler 只有 health——Next.js 全端的標準做法，最少程式碼；代價是沒有給行動 App 或第三方用的 API，需要時再加（建議）。
   - B：Route Handlers 提供 REST 加手寫 OpenAPI，畫面也走這組 API——和另外兩個 template 的契約一致；代價是多一層，也失去 Server Actions 的簡潔。
@@ -144,7 +145,7 @@
 |---|---|---|---|---|
 | 0 spike | 完成 | 2026-11-03：`spike.md`、`auth-parity.md` 產出；orchestrator 重跑 a 的 vitest（20 過）、b 的 integration（各 2 過）、parity 完整性（87 名稱無缺） | a 的 4 個 Docker stack 測試與 c 未由 orchestrator 重跑（機器 load 高；子代理已實測，原始輸出在 `spike.md`）；amd64 未測 | 未 commit（repo 無首個 commit，併入步驟 1） |
 | 1 walking skeleton | 完成 | 2026-11-03：本機 `pnpm check` exit 0（unit 13）；CI run 41581092195 全綠（app 含 integration 8、policy、rename、stack：health 200、en／zh-TW 各 20 個 script 全帶 nonce、uid 1001、app 角色 DDL 被拒；Security 全綠）；mutation：PR #4 health 回 500 → stack job `app is unhealthy` 失敗、integration 測試 `expected 500 to be 200`；PR #5 刪一個 integration 測試 → `tests.integration: 7, locked at 8`；本機 mutation：depcruise 違規、server-only 標頭、noProcessEnv、zizmor unpinned-uses、hadolint、unit 測試數鎖；消費端 `rg` 無結果；獨立 code review 1 blocking＋5 should 已修 | `_global-error` 是靜態頁卻帶 nonce CSP（錯誤頁不 hydrate），記為步驟 2 處理；drizzle-kit 接著 0000 snapshot 產生下一支 migration 由步驟 2 第一個 schema 驗證 | dev `308cf6b` 之後（見 git log） |
-| 2a 資料層與服務層 | 完成 | 2026-11-03：本機 `pnpm check` exit 0（unit 52）；CI run 41591430229 全綠（integration 31、Security 綠）；mutation：本機 argon2 記憶體調到 8 MiB、拿掉同時雜湊上限各讓一個 unit 測試失敗；CI draft PR #6（run 41591010631）四個 mutation（明文 token、登入不刪舊 session、FK 不 cascade、撤銷不檢查擁有者）讓 5 個目標 integration 測試失敗、其餘 25 過；auth-parity 2a 列的 35 個 TS 測試名 `rg` 全找得到；`/code-review high` 10 條（6 修、1 記入 2b、1 接受、2 交 Will），diff 視角審查 1 blocking＋2 should 已修、2 nit 不修；drizzle-kit 接著 0000 產生 0001（步驟 1 留下的未驗收項） | 交 Will 的 2 題：NFKC 後長度要不要再檢查、登入成功只清該來源的計數（皆比 Go 嚴格，算偏離）；遠端分支 `ci-mutation/2a-service` 待 Will 同意刪除 | dev `8ecd95f`…`8602365` |
+| 2a 資料層與服務層 | 完成 | 2026-11-03：本機 `pnpm check` exit 0（unit 52）；CI run 41591430229 全綠（integration 31、Security 綠）；mutation：本機 argon2 記憶體調到 8 MiB、拿掉同時雜湊上限各讓一個 unit 測試失敗；CI draft PR #6（run 41591010631）四個 mutation（明文 token、登入不刪舊 session、FK 不 cascade、撤銷不檢查擁有者）讓 5 個目標 integration 測試失敗、其餘 25 過；auth-parity 2a 列的 35 個 TS 測試名 `rg` 全找得到；`/code-review high` 10 條（6 修、1 記入 2b、1 接受、2 交 Will），diff 視角審查 1 blocking＋2 should 已修、2 nit 不修；drizzle-kit 接著 0000 產生 0001（步驟 1 留下的未驗收項） | 未決：NFKC 後長度要不要再檢查（比 Go 嚴格，算偏離，交 Will）。已決：登入成功只清該來源的計數（D2 偏離第 11 條）；遠端分支 `ci-mutation/2a-service` 已刪 | dev `8ecd95f`…`8602365` |
 | 2b Server Action 邊界 | 未開始 | | | |
 | 2c 畫面與收尾 | 未開始 | | | |
 | 3 items | 未開始 | | | |
