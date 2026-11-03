@@ -111,6 +111,7 @@ class CommitPolicyTest(unittest.TestCase):
 
     def test_generated_files_do_not_count(self):
         self.write(".gitattributes", "*.yaml linguist-generated=true\n")
+        self.commit("chore: mark lockfiles generated\n\nQuality-Gate: lockfiles are generated")
         self.write("pnpm-lock.yaml", "x: 1\n" * 5000)
         self.commit("build: bump deps")
         self.assertEqual(self.check_range().returncode, 0, self.check_range().stderr)
@@ -127,6 +128,33 @@ class CommitPolicyTest(unittest.TestCase):
         # a commented-out trailer does not count
         self.assertEqual(self.check_staged("chore: relax ts\n\n# Quality-Gate: no\n").returncode, 1)
         self.assertEqual(self.check_staged("chore: relax ts\n\nQuality-Gate: needed for X\n").returncode, 0)
+
+    def test_gitattributes_edit_needs_trailer(self):
+        # marking files generated takes them out of the size count, so it is a gate change itself
+        self.write(".gitattributes", "** linguist-generated=true\n")
+        self.commit("chore: attrs")
+        self.assertIn("edits .gitattributes", self.check_range().stderr)
+
+    def test_package_scripts_change_needs_trailer(self):
+        self.write("package.json", json.dumps({"scripts": {"check": "pnpm lint && pnpm test"}}))
+        self.commit("chore: scripts")
+        self.base = self.git("rev-parse", "HEAD").strip()
+        self.write("package.json", json.dumps({"scripts": {"check": "pnpm lint"}}))
+        self.commit("chore: drop tests from check")
+        self.assertIn("changes the scripts in package.json", self.check_range().stderr)
+
+    def test_package_dependency_change_needs_no_trailer(self):
+        self.write("package.json", json.dumps({"scripts": {"check": "x"}, "dependencies": {}}))
+        self.commit("chore: scripts")
+        self.base = self.git("rev-parse", "HEAD").strip()
+        self.write("package.json", json.dumps({"scripts": {"check": "x"}, "dependencies": {"zod": "4"}}))
+        self.commit("build: add zod")
+        self.assertEqual(self.check_range().returncode, 0, self.check_range().stderr)
+
+    def test_trailer_above_the_scissors_line_counts(self):
+        self.write("biome.json", "{}\n")
+        message = "ci: lint\n\nQuality-Gate: why\n# ------------------------ >8 ------------------------\ndiff --git a b\n"
+        self.assertEqual(self.check_staged(message).returncode, 0)
 
     def test_head_only_range_checks_the_root_commit(self):
         # a new branch's first push has no base: every reachable commit is checked, the root commit included

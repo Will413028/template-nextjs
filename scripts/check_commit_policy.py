@@ -6,8 +6,8 @@ Usage:
   python3 scripts/check_commit_policy.py --range <base>..<head> # CI: every non-merge commit in the range
   python3 scripts/check_commit_policy.py --range <head>          # CI, a new branch: every commit reachable from head
 
-A commit needs a `Quality-Gate: <reason>` trailer when it edits a checker's configuration (GATE_FILES), or moves a
-lock in scripts/quality-locks.json the bad way (more suppressions, fewer tests). Moving a lock the good way needs no
+A commit needs a `Quality-Gate: <reason>` trailer when it edits a checker's configuration (GATE_FILES), changes the
+`scripts` of package.json (where pnpm check is composed), or moves a lock in scripts/quality-locks.json the bad way (more suppressions, fewer tests). Moving a lock the good way needs no
 reason. A commit that changes more than MAX_LINES lines, not counting files .gitattributes marks linguist-generated,
 needs a `Large-Change: <reason>` trailer: a change that size is hard to review, so it is split or says why it cannot
 be. Run from the repository root. In --commit-msg mode the staged changes are compared with HEAD, so an amend is
@@ -23,8 +23,15 @@ TRAILER = "Quality-Gate"
 LARGE_TRAILER = "Large-Change"
 MAX_LINES = 1000
 LOCKS = "scripts/quality-locks.json"
+PACKAGE = "package.json"
 # Files whose edits can switch a check off or lower a bar. A new checker's configuration belongs here.
 GATE_FILES = {
+    # what CI and the hooks run, and what counts toward a commit's size
+    ".github/workflows/ci.yml",
+    ".github/workflows/security.yml",
+    ".gitattributes",
+    # supply chain: install scripts and the release-age cooldown
+    "pnpm-workspace.yaml",
     ".dependency-cruiser.cjs",
     ".squawk.toml",
     "biome.json",
@@ -49,7 +56,12 @@ def show(rev: str, path: str) -> str | None:
     return git("show", f"{rev}:{path}") if listed.strip() else None
 
 
+SCISSORS = "# ------------------------ >8 ------------------------"
+
+
 def trailers(message: str) -> dict[str, str]:
+    # `git commit -v` appends the diff below a scissors line; git drops everything from there on
+    message = message.split(SCISSORS, 1)[0]
     body = "\n".join(line for line in message.splitlines() if not line.startswith("#"))
     parsed = subprocess.run(
         ["git", "interpret-trailers", "--parse"], input=body, check=True, capture_output=True, text=True
@@ -60,6 +72,12 @@ def trailers(message: str) -> dict[str, str]:
         if value.strip():
             found[key.strip()] = value.strip()
     return found
+
+
+def scripts_changed(old: str | None, new: str | None) -> bool:
+    if old is None or new is None:
+        return False
+    return json.loads(old).get("scripts") != json.loads(new).get("scripts")
 
 
 def worse_locks(old: str | None, new: str | None) -> list[str]:
@@ -97,6 +115,10 @@ def violations(changed: list[str], old_rev: str | None, new_rev: str, message: s
     reasons = []
     if TRAILER not in found:
         reasons += [f"edits {path}" for path in changed if path in GATE_FILES or path.endswith(GATE_SUFFIXES)]
+        if PACKAGE in changed:
+            old = show(old_rev, PACKAGE) if old_rev is not None else None
+            if scripts_changed(old, show(new_rev, PACKAGE)):
+                reasons.append(f"changes the scripts in {PACKAGE}")
         if LOCKS in changed:
             old = show(old_rev, LOCKS) if old_rev is not None else None
             reasons += [f"moves the lock {m}" for m in worse_locks(old, show(new_rev, LOCKS))]
