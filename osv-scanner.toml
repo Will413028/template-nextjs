@@ -1,0 +1,19 @@
+# Advisories in dev and CI tooling whose fix needs a major version the parent package does not support yet. Each
+# expires at the repository's deadline for its severity (medium: 90 days, AGENTS.md); the scan fails again then.
+# None of these packages is in the production image: the standalone server and the migrate image carry only
+# production dependencies.
+
+[[IgnoredVulns]]
+id = "GHSA-67mh-4wv8-2f99"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "Medium (CVSS 5.3). esbuild 0.18.20 comes only from drizzle-kit 0.31.11 -> @esbuild-kit/core-utils, which pins ~0.18 and uses esbuild to transpile drizzle.config.ts, never its development server (the advisory). Fixed in esbuild 0.25; recheck when drizzle-kit drops @esbuild-kit (1.0)."
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "Medium (CVSS 6.3). glob 10.5.0 comes only from @testcontainers/postgresql -> testcontainers -> archiver, which passes no AbortSignal (the advisory is a cancellation bypass). Fixed only in glob 14, a major archiver 7 does not support. Integration tests run in CI only."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "Medium (CVSS 6.9). minimatch 5.1.9 and 9.0.9 come only from testcontainers -> archiver (readdir-glob, glob), matching patterns testcontainers builds from our own files. Fixed only in minimatch 11, a major archiver 7 does not support. Integration tests run in CI only."
