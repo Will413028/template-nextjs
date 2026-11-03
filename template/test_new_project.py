@@ -186,16 +186,38 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
 
     def test_output_referring_to_an_excluded_directory_writes_nothing(self):
-        self.assert_refused_and_untouched(files={**BASE_FILES, "notes.md": "see `docs/plans/` and template/README.md\n"})
+        for text in ("see `docs/plans/`\n", "see template/README.md\n", "[plan](../docs/plans/x.md)\n",
+                     "run ./template/x\n", "run make new NAME=x\n"):
+            with self.subTest(text=text):
+                self.tearDown()
+                self.setUp()
+                self.assert_refused_and_untouched(files={**BASE_FILES, "notes.md": text})
 
-    def test_a_symlink_leaving_the_tree_writes_nothing(self):
-        src = make_template(self.root, BASE_FILES)
-        (src / "escape").symlink_to("/etc/hosts")
-        git(src, "add", "escape")
-        git(src, "commit", "-q", "-m", "link")
-        with self.assertRaises(new_project.GenerateError):
-            new_project.generate(src, self.root / "out", "my-app", "acme/my-app")
-        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
+    def test_a_symlink_writes_nothing(self):
+        for target in ("/etc/hosts", "README.md"):  # leaving the tree, and inside it
+            with self.subTest(target=target):
+                self.tearDown()
+                self.setUp()
+                src = make_template(self.root, BASE_FILES)
+                (src / "link").symlink_to(target)
+                git(src, "add", "link")
+                git(src, "commit", "-q", "-m", "link")
+                with self.assertRaises(new_project.GenerateError):
+                    new_project.generate(src, self.root / "out", "my-app", "acme/my-app")
+                self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
+
+    def test_export_attributes_write_nothing(self):
+        self.assert_refused_and_untouched(files={**BASE_FILES, ".gitattributes": "SECURITY.md export-ignore\n"})
+
+    def test_a_derived_file_keeps_its_mode_and_may_add_a_directory(self):
+        files = {**BASE_FILES, "template/derived/bin/run.sh": "#!/bin/sh\n"}
+        src = make_template(self.root, files)
+        (src / "template/derived/bin/run.sh").chmod(0o755)
+        git(src, "add", "-A")
+        git(src, "commit", "-q", "-m", "exec")
+        dest = self.root / "out"
+        new_project.generate(src, dest, "my-app", "acme/my-app")
+        self.assertTrue(os.access(dest / "bin/run.sh", os.X_OK))
 
     def test_a_failed_move_gives_back_the_empty_destination(self):
         dest = self.root / "out"
@@ -209,8 +231,15 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual(list(dest.iterdir()), [])
 
     def test_other_paths_under_a_template_directory_are_allowed(self):
-        _, dest, _ = self.generate(files={**BASE_FILES, "src/mail/template/x.ts": 'import "./template/body";\n'})
+        _, dest, _ = self.generate(files={**BASE_FILES, "src/mail/template/x.ts": 'import "./body";\n'})
         self.assertTrue((dest / "src/mail/template/x.ts").exists())
+
+    def test_an_old_python_is_an_error_message(self):
+        # tarfile's extraction filters came with Python 3.12 (and late 3.8-3.11 patch releases)
+        with mock.patch.object(new_project, "tarfile", object()), \
+                self.assertRaisesRegex(new_project.GenerateError, "3.12"):
+            new_project.generate(make_template(self.root, BASE_FILES), self.root / "out", "my-app", "acme/my-app")
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
 
     def test_the_longest_name_still_fits_postgres(self):
         new_project.check_arguments("a" * 57, "acme/x")  # a57_owner is 63 bytes, PostgreSQL's limit
@@ -227,7 +256,7 @@ class TemplateRepositoryTest(unittest.TestCase):
     """Rules about this repository's own files that the generator relies on."""
 
     def test_the_real_template_generates_cleanly(self):
-        # computes (never writes) the output of this checkout's HEAD: every check except the clean-tree one
+        # writes the output of this checkout's HEAD to a temporary directory: every check except the clean-tree one
         top = SCRIPT.parent.parent
         with tempfile.TemporaryDirectory() as tmp:
             out = pathlib.Path(tmp) / "project"

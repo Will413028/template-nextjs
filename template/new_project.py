@@ -34,17 +34,20 @@ EXCLUDED = ("template/", "docs/plans/")
 # template/derived/<path> replaces <path> in the output.
 DERIVED = "template/derived/"
 BEGIN, END = ">>> template-only", "<<< template-only"
+GENERATOR = pathlib.Path(__file__).stem  # new_project
+MAKE_TARGET = "make new"
 # PostgreSQL truncates identifiers at 63 bytes; the longest one made from the name is the role <name>_owner.
 MAX_NAME = 63 - len("_owner")
 NAME_PATTERN = re.compile(r"[a-z](?:[a-z0-9-]*[a-z0-9])?")
 REPO_PATTERN = re.compile(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+")
-# What the output must not hold, derived from the tables above: a template name in any case, a reference to an
-# excluded path (at a path boundary, so src/mail/template/ is fine), a marker.
+# What the output must not hold, derived from the tables above: a template name in any case; a reference to an
+# excluded path at a path boundary or after ./ or ../ (src/mail/template/ is fine); the generator and its make target;
+# a marker.
 FORBIDDEN = re.compile(
     "|".join(
         [re.escape(token) for token in (OLD_REPO, OLD_DB, OLD_NAME)]
-        + [r"(?<![\w./-])" + re.escape(prefix) for prefix in EXCLUDED]
-        + [re.escape(BEGIN), re.escape(END)]
+        + [r"(?:(?<![\w./-])|(?<=\./))" + re.escape(prefix) for prefix in EXCLUDED]
+        + [re.escape(GENERATOR), re.escape(MAKE_TARGET) + r"\b", re.escape(BEGIN), re.escape(END)]
     ),
     re.IGNORECASE,
 )
@@ -86,29 +89,47 @@ def drop_template_only(path: str, text: str) -> str:
     return "".join(kept)
 
 
+def export(top: pathlib.Path, sha: str, into: pathlib.Path, *pathspecs: str) -> None:
+    """Unpack `git archive` of the pathspecs at sha into the new directory into."""
+    # tar.umask=user: the archive's modes follow the user's umask, as files they created would
+    archive = run_git(top, "-c", "tar.umask=user", "archive", "--format=tar", sha, "--", *pathspecs)
+    into.mkdir()
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+            tar.extractall(into, filter="data")  # refuses absolute links and links leaving the tree
+    except tarfile.FilterError as error:
+        raise GenerateError(f"the template holds an entry the export refuses: {error}") from error
+
+
 def materialize(top: pathlib.Path, out: pathlib.Path, name: str, repo: str) -> str:
     """Write the checked output tree of top's HEAD to out (which must not exist). Returns the template commit."""
     sha = run_git(top, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
-    # tar.umask=user: the archive's modes follow the user's umask, as files they created would
-    archive = run_git(top, "-c", "tar.umask=user", "archive", "--format=tar", sha, "--", ".",
-                      *(f":!{prefix}" for prefix in EXCLUDED))
-    out.mkdir()
-    try:
-        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
-            tar.extractall(out, filter="data")  # refuses absolute links and links leaving the tree
-    except tarfile.FilterError as error:
-        raise GenerateError(f"the template holds an entry the export refuses: {error}") from error
+    # git archive applies export-ignore and export-subst; the output must be the committed files, nothing else
+    found = subprocess.run(["git", "grep", "-l", "-E", "export-(ignore|subst)", sha, "--", ":(glob)**/.gitattributes"],
+                           cwd=top, capture_output=True, check=False)
+    if found.returncode not in (0, 1):  # 1: no match
+        raise GenerateError(f"git grep failed in {top}: {found.stderr.decode(errors='replace').strip()}")
+    if found.returncode == 0:
+        raise GenerateError("a .gitattributes sets export-ignore or export-subst, which would change the output")
+    export(top, sha, out, ".", *(f":!{prefix}" for prefix in EXCLUDED))
     if not (out / "package.json").is_file():
         raise GenerateError(f"{top} does not look like the template: no package.json at HEAD")
-    for path in run_git(top, "ls-tree", "-r", "-z", "--name-only", sha, "--", DERIVED).decode().split("\0"):
-        if path:
-            (out / path[len(DERIVED):]).write_bytes(run_git(top, "show", f"{sha}:{path}"))
+    if run_git(top, "ls-tree", "-r", "--name-only", sha, "--", DERIVED).strip():
+        derived = out.parent / "derived"
+        export(top, sha, derived, DERIVED)
+        for source in (p for p in (derived / DERIVED).rglob("*") if p.is_file() or p.is_symlink()):
+            target = out / source.relative_to(derived / DERIVED)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(source, target)  # keeps the derived file's own mode
+    # regular files only: a link would carry a name or a target the checks below never read
+    if links := sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_symlink()):
+        raise GenerateError(f"the template holds symbolic links, which are not copied: {', '.join(links)}")
 
     table = {OLD_REPO: repo, OLD_DB: name.replace("-", "_"), OLD_NAME: name}
     # one pass, longest token first: a replacement is never scanned again, so a repository may contain the name
     pattern = re.compile("|".join(re.escape(t) for t in sorted(table, key=len, reverse=True)))
     problems: list[str] = []
-    for file in sorted(p for p in out.rglob("*") if p.is_file() and not p.is_symlink()):
+    for file in sorted(p for p in out.rglob("*") if p.is_file()):
         rel = file.relative_to(out).as_posix()
         problems += [f"{rel}: the path holds {m.group(0)!r} (file names are not rewritten)"
                      for m in FORBIDDEN.finditer(rel)]
@@ -131,6 +152,8 @@ def materialize(top: pathlib.Path, out: pathlib.Path, name: str, repo: str) -> s
 def generate(top: pathlib.Path, dest: pathlib.Path, name: str, repo: str) -> str:
     """Generate into dest (missing or an empty directory). Returns the template commit it was generated from."""
     check_arguments(name, repo)
+    if not hasattr(tarfile, "data_filter"):
+        raise GenerateError(f"Python {sys.version.split()[0]} lacks tarfile's extraction filters; use Python 3.12+")
     dest = dest.absolute()
     if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
         raise GenerateError(f"{dest} exists and is not an empty directory")
@@ -154,7 +177,7 @@ def generate(top: pathlib.Path, dest: pathlib.Path, name: str, repo: str) -> str
         run_git(out, "commit", "-q", "-F", "-", stdin=message.encode())
         os.rename(out, dest)  # same filesystem; replaces an empty dest in one step
     except OSError as error:
-        raise GenerateError(f"could not create {dest}: {error}") from error
+        raise GenerateError(f"generating {dest} failed: {error}") from error
     finally:
         shutil.rmtree(work, ignore_errors=True)
     return sha
