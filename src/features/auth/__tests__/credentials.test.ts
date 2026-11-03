@@ -35,6 +35,15 @@ describe("sign-up input", () => {
     ).toEqual({ password: "too_long" });
   });
 
+  it("counts the minimum after NFKC, which can shorten a password", () => {
+    // 16 code points typed as "e" + combining acute; NFKC makes 8 "é"
+    const decomposed = "e\u0301".repeat(8);
+    expect(decomposed.normalize("NFKC")).toHaveLength(8);
+    expect(
+      errors(signUpInput, { username: "alice", password: decomposed }),
+    ).toEqual({ password: "too_short" });
+  });
+
   it.each([
     ["ab", "too_short"],
     ["a".repeat(51), "too_long"],

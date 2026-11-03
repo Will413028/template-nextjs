@@ -16,8 +16,15 @@ export const signUpInput = z.object({
   username: length(3, 50).refine((s) => /^[A-Za-z0-9_.-]*$/.test(s), {
     message: "invalid_characters",
   }),
-  // NIST SP 800-63B-4: 15 or more, no composition rules; the common-password check runs on the server
-  password: length(15, 128),
+  // NIST SP 800-63B-4: 15 or more, no composition rules; the common-password check runs on the server. The minimum
+  // counts the NFKC form the server hashes, which can be shorter than what was typed; the maximum counts the input
+  // (plan D2 deviation 12; template-go-nextjs counts the input for both).
+  password: z
+    .string()
+    .refine((s) => codePoints(s.normalize("NFKC")) >= 15, {
+      message: "too_short",
+    })
+    .refine((s) => codePoints(s) <= 128, { message: "too_long" }),
 });
 
 export const signInInput = z.object({
