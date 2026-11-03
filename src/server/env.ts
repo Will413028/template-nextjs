@@ -54,3 +54,28 @@ export function connectionFields(url: string) {
     database: decodeURIComponent(u.pathname.slice(1)),
   };
 }
+
+const authEnv = z.object({
+  // the proxies whose X-Forwarded-For is believed: Caddy's fixed address in docker-compose.yml (ADR api-and-auth D1)
+  TRUSTED_PROXIES: z.string().default(""),
+  // sign-up and sign-in requests a client may send a minute, bursting to as many (template-go-nextjs default)
+  AUTH_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(5),
+});
+
+export type AuthConfig = {
+  trustedProxies: string[];
+  rateLimitPerMinute: number;
+};
+
+export function authConfig(): AuthConfig {
+  const env = authEnv.parse({
+    TRUSTED_PROXIES: process.env.TRUSTED_PROXIES || undefined,
+    AUTH_RATE_LIMIT_PER_MIN: process.env.AUTH_RATE_LIMIT_PER_MIN || undefined,
+  });
+  return {
+    trustedProxies: env.TRUSTED_PROXIES.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    rateLimitPerMinute: env.AUTH_RATE_LIMIT_PER_MIN,
+  };
+}

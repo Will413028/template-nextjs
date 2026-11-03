@@ -34,7 +34,7 @@ export function createDatabase(config: DatabaseConfig): {
 let shared: Database | undefined;
 
 // The process-wide database, created on first use so that `next build` never connects.
-function db(): Database {
+export function db(): Database {
   shared ??= createDatabase(databaseConfig()).db;
   return shared;
 }
