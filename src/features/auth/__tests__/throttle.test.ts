@@ -62,6 +62,48 @@ describe("SignInThrottle", () => {
     expect(throttle.reserve("alice", "198.51.100.7")).toBe(0);
   });
 
+  // plan D9=D: an attacker with many sources (an IPv6 /48 has 65,536 /64s) must not grow the counts without bound
+  it("keeps at most maxEntries counts, evicting the least recently counted pair with fewer than 5 failures", () => {
+    let now = 0;
+    const throttle = new SignInThrottle(() => now, 3);
+    for (let n = 0; n < 5; n++) throttle.reserve("waiting", "192.0.2.1");
+    now = 1;
+    for (let n = 0; n < 3; n++) throttle.reserve("old", "192.0.2.1");
+    now = 2;
+    throttle.reserve("first", "192.0.2.1");
+    now = 3;
+    throttle.reserve("old", "192.0.2.1"); // its 4th failure: now counted after "first"
+    now = 4;
+    expect(throttle.reserve("third", "192.0.2.1")).toBe(0);
+    expect(throttle.size).toBe(3);
+    // "first" went, not "waiting" (older but in its backoff) nor "old" (counted later; its 5th failure starts a wait)
+    expect(throttle.reserve("waiting", "192.0.2.1")).toBeGreaterThan(0);
+    expect(throttle.reserve("old", "192.0.2.1")).toBe(0);
+    expect(throttle.reserve("old", "192.0.2.1")).toBeGreaterThan(0);
+  });
+
+  // Evicting a pair in its backoff would reset it: after its wait the next failure must wait longer, not start over
+  it("never evicts a pair with 5 or more failures, even after its wait, and lets a new pair through uncounted then", () => {
+    let now = 0;
+    const throttle = new SignInThrottle(() => now, 2);
+    for (const username of ["a", "b"]) {
+      for (let n = 0; n < 5; n++) throttle.reserve(username, "192.0.2.1");
+    }
+    now = MINUTE; // both waits are over
+    for (let n = 0; n < 6; n++) {
+      expect(throttle.reserve("c", "192.0.2.1")).toBe(0);
+    }
+    expect(throttle.size).toBe(2);
+    expect(throttle.reserve("a", "192.0.2.1")).toBe(0); // the 6th failure
+    expect(throttle.reserve("a", "192.0.2.1")).toBe(2 * MINUTE);
+    // a freed slot is used again
+    throttle.succeeded("b", "192.0.2.1");
+    for (let n = 0; n < 5; n++) {
+      expect(throttle.reserve("c", "192.0.2.1")).toBe(0);
+    }
+    expect(throttle.reserve("c", "192.0.2.1")).toBeGreaterThan(0);
+  });
+
   it("forgets counts untouched for a day", () => {
     let now = 0;
     const throttle = new SignInThrottle(() => now);

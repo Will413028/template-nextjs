@@ -64,35 +64,60 @@ export class IPLimiter {
 // How long a pair's count is kept after its last attempt; the longest wait is an hour.
 const KEEP_FOR = 24 * 60 * MINUTE;
 
+// At most this many pairs are counted (plan D9=D; memory measured in the plan). Without a cap an attacker with many
+// sources grows the counts without bound (one source adds up to 7,204 pairs a day at 5 sign-ins a minute; an IPv6 /48
+// holds 65,536 /64 sources).
+const MAX_ENTRIES = 100_000;
+
+// Failures before the first wait.
+const FREE = 5;
+
+type Count = { failures: number; nextAllowedAt: number; updatedAt: number };
+
 // Exponential backoff per username and source (template-go-nextjs ADR account-abuse-and-lifecycle D4a): each source
 // has its own count, so one client's failures do not lock out another. The attempt is counted before the password is
 // checked, so requests sent together cannot all pass a wait that is not recorded yet. From the 5th consecutive
 // failure the next attempt waits 2^(n-5) minutes, at most an hour. A successful sign-in clears its source's count.
+//
+// When maxEntries pairs are counted, a new pair evicts the least recently counted pair with fewer than 5 failures, in
+// constant time. A pair that reached its backoff is never evicted (only the daily sweep drops it), so eviction resets
+// at most 4 free attempts, which an attacker able to fill the map already has from each of their sources. When every
+// pair has reached its backoff, a new pair's attempt goes ahead uncounted: such an attacker gets 5 attempts a minute
+// per source (the per-IP limit) at a username on sources not counted yet, instead of 4 and a wait.
 export class SignInThrottle {
-  private readonly counts = new Map<
-    string,
-    Map<string, { failures: number; nextAllowedAt: number; updatedAt: number }>
-  >();
+  // Keyed by source and username (a source has no spaces). Pairs with fewer than FREE failures, least recently
+  // counted first (a count is re-inserted when it changes); the eviction candidates.
+  private readonly partial = new Map<string, Count>();
+  // Pairs with FREE or more failures; never evicted.
+  private readonly backoff = new Map<string, Count>();
 
-  constructor(private readonly now: Clock) {}
+  constructor(
+    private readonly now: Clock,
+    private readonly maxEntries = MAX_ENTRIES,
+  ) {}
 
   // Counts the attempt and returns 0, or returns the milliseconds to wait (at least a second) without counting it.
   reserve(username: string, source: string): number {
     const now = this.now();
-    const sources = this.counts.get(username) ?? new Map();
-    const count = sources.get(source);
+    const key = `${source} ${username}`;
+    const count = this.partial.get(key) ?? this.backoff.get(key);
     if (count && count.nextAllowedAt > now) {
       return Math.max(1000, count.nextAllowedAt - now);
     }
+    if (!count && this.size >= this.maxEntries) {
+      const oldest = this.partial.keys().next();
+      if (oldest.done) return 0;
+      this.partial.delete(oldest.value);
+    }
     const failures = (count?.failures ?? 0) + 1;
     const wait =
-      failures >= 5 ? Math.min(2 ** Math.min(failures - 5, 6), 60) * MINUTE : 0;
-    sources.set(source, {
-      failures,
-      nextAllowedAt: now + wait,
-      updatedAt: now,
-    });
-    this.counts.set(username, sources);
+      failures >= FREE
+        ? Math.min(2 ** Math.min(failures - FREE, 6), 60) * MINUTE
+        : 0;
+    const next = { failures, nextAllowedAt: now + wait, updatedAt: now };
+    this.partial.delete(key);
+    if (failures >= FREE) this.backoff.set(key, next);
+    else this.partial.set(key, next); // last: the most recently counted
     return 0;
   }
 
@@ -100,23 +125,26 @@ export class SignInThrottle {
   // reset an attacker's backoff (template-go-nextjs clears them all, alongside an account-wide cap this step defers;
   // plan D2 deviation 11).
   succeeded(username: string, source: string): void {
-    const sources = this.counts.get(username);
-    sources?.delete(source);
-    if (sources?.size === 0) this.counts.delete(username);
+    const key = `${source} ${username}`;
+    this.partial.delete(key);
+    this.backoff.delete(key);
+  }
+
+  get size(): number {
+    return this.partial.size + this.backoff.size;
   }
 
   // Drops counts untouched for a day.
   sweep(): number {
     const cutoff = this.now() - KEEP_FOR;
     let dropped = 0;
-    for (const [username, sources] of this.counts) {
-      for (const [source, count] of sources) {
+    for (const counts of [this.partial, this.backoff]) {
+      for (const [key, count] of counts) {
         if (count.updatedAt <= cutoff) {
-          sources.delete(source);
+          counts.delete(key);
           dropped++;
         }
       }
-      if (sources.size === 0) this.counts.delete(username);
     }
     return dropped;
   }
