@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "title": "template-nextjs",
+    "description": "只用 Next.js 建構的全端範本，搭配 PostgreSQL 與 Docker Compose。"
+  },
+  "home": {
+    "title": "template-nextjs",
+    "description": "只用 Next.js 建構的全端範本，搭配 PostgreSQL 與 Docker Compose。"
+  },
+  "error": {
+    "title": "發生錯誤",
+    "description": "發生未預期的錯誤，請再試一次。",
+    "retry": "再試一次"
+  },
+  "notFound": {
+    "title": "找不到頁面",
+    "goHome": "回到首頁"
+  }
+}

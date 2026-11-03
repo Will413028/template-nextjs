@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "title": "template-nextjs",
+    "description": "A fullstack template built only on Next.js, with PostgreSQL and Docker Compose."
+  },
+  "home": {
+    "title": "template-nextjs",
+    "description": "A fullstack template built only on Next.js, with PostgreSQL and Docker Compose."
+  },
+  "error": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. Please try again.",
+    "retry": "Try again"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "goHome": "Go home"
+  }
+}

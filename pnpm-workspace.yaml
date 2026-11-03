@@ -1,0 +1,18 @@
+# Install scripts run only for the packages listed here.
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
+  sharp: true
+  # Installed by the prepare script instead of its own postinstall.
+  lefthook: false
+  # esbuild (drizzle-kit, vitest) runs from its platform package; its postinstall only re-verifies that binary.
+  esbuild: false
+  # Optional native speedups of ssh2 (testcontainers' Docker client), which falls back to JavaScript.
+  cpu-features: false
+  ssh2: false
+  # Its postinstall only prints a notice.
+  protobufjs: false
+
+# Skip versions published less than a day ago. Setting it explicitly also makes
+# pnpm fail instead of silently falling back to a younger version.
+minimumReleaseAge: 1440
