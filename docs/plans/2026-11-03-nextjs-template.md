@@ -62,9 +62,10 @@
   - [ ] **2b. Server Action 邊界**（被擋於：2a）
     - 範圍：`server.ts`（`requireSession`、`authedAction`、`publicAction`、`Viewer`）、`actions.ts`（註冊、登入、登出、全部登出、撤銷 session、刪帳號）與 `__Host-session` cookie；登入與註冊的 per-IP 限流和節流接上 action；`proxy.ts` 的 Fetch Metadata CSRF（D2 偏離清單第 1 條）與 matcher 涵蓋所有路徑；清失效 cookie 的 GET Route Handler（D3 修訂）；peer preload（D2 偏離清單第 3 條）與 Dockerfile 的 `NODE_OPTIONS`；`next start` harness 與 action client（spike 0(a) §7）；「`"use server"` 檔只叫 `actions.ts`、每個 export 是 `authedAction(`／`publicAction(`」單元測試；「manifest 每個 action 不帶 cookie 被拒」integration 測試。
     - 範圍補充（2a code review 留下的）：`SignInThrottle` 為每組「帳號＋來源」各存一筆、保留 24 小時，未知帳號也算；接上 per-IP 限流後，量出一個來源每分鐘最多能新增幾筆，決定要不要設總筆數上限（上限滿時不能淘汰別人的計數，否則攻擊者能借此重置退避）。接受、不修：DB 出錯的登入嘗試仍算一次失敗（和 Go 的 `ReserveLoginAttempt` 相同）。
-    - 驗收：auth-parity 屬 cookie、action、CSRF、client IP、限流的列填上 TS 測試名；mutation：cookie 移除 `httpOnly`、`serverActions.allowedOrigins` 加 `evil.test`。
+    - 範圍補充（2026-11-03 開工時）：build manifest 只收「有頁面 import 的 action」（實測：見進度表），integration 測試要呼叫得到每個 action，所以 2b 先放最小可用的頁面——`/[locale]/sign-in`、`sign-up`、`dashboard`（顯示 username、登出）、`settings`（裝置列表與撤銷、全部登出、刪帳號），文字走 next-intl 的 `auth` namespace，錯誤只顯示原始 code；2c 負責樣式、錯誤碼翻譯、overview 內容與端到端流程。session 與節流的每小時 cleanup 在 auth runtime 第一次建立時啟動（`setInterval(...).unref()`），不另開 `instrumentation.ts`。
+    - 驗收：auth-parity 屬 cookie、action、CSRF、client IP、限流的列填上 TS 測試名；mutation：cookie 移除 `httpOnly`、`serverActions.allowedOrigins` 加 `evil.test`（proxy 先擋 Origin 不符的請求，所以這個 mutation 由「`Sec-Fetch-Site: same-origin` 但 Origin 是外站」那一案驗：proxy 放行、Next 內建檢查擋下）。
   - [ ] **2c. 畫面與收尾**（被擋於：2b）
-    - 範圍：U2 註冊與登入頁、U3 dashboard overview 與 settings（登入中裝置列表與撤銷、全部登出、刪帳號）、`messages/*.json` 的錯誤碼翻譯；步驟 1 留下的 `_global-error` nonce 問題；端到端流程與 stack job 經 Caddy；requirements 的 U2、U3、E1、E2、F1、F2 改「完成」。
+    - 範圍：U2 註冊與登入頁、U3 dashboard overview 與 settings（登入中裝置列表與撤銷、全部登出、刪帳號；2b 已放最小可用版，2c 補樣式與內容）、`messages/*.json` 的錯誤碼翻譯、next-intl 的 `timeZone`（2b code review：settings 的時間目前用伺服器時區並記錄警告）；2b 留下的 request id（auth-parity `TestRequestID*` 與 `TestSecurityEventsLogged` 的 `request_id`）；步驟 1 留下的 `_global-error` nonce 問題；端到端流程與 stack job 經 Caddy；requirements 的 U2、U3、E1、E2、F1、F2 改「完成」。
     - 驗收：本步下列「驗收」的端到端流程與剩餘 mutation；auth-parity 標步驟 2 的列全部核對。
   - 驗收：`auth-parity.md` 標步驟 2 的列，「沿用」的 TS 測試名欄都有值且 `rg -n '<TS 測試名>' src` 找得到，「偏離」的在 D2 偏離清單裡且已確認；用步驟 0 (a) 的 harness 跑「註冊 → 登入 → GET `/dashboard` 頁面含自己的 username → 登出 → 再 GET 被導回登入頁」，CI stack job 用同一個 client 經 Caddy 跑一次；mutation（每項都要讓測試失敗）：cookie 選項移除 `httpOnly`；`serverActions.allowedOrigins` 加入攻擊來源 `evil.test`；argon2 參數調低；DB 改存明文 token；登入沿用舊 token；刪帳號不刪 session；拿掉同時雜湊數上限；撤銷 session 不檢查擁有者。
 - [ ] **3. items 垂直切片**（被擋於：D4、步驟 2）
@@ -136,7 +137,17 @@
   - C：照 Next 文件用單一 `data/` 加集中的 schema——兩個功能時最簡單；功能變多後 data、actions、元件分散三處。
   - 結論：B。規則（`.dependency-cruiser.cjs`，全部 error、零例外）：無環；`lib`、`components`、`hooks`、`i18n` 不 import `features`、`app`、`server`；`src/server/**` 只 import `lib`；`features` 不 import `app`；feature 外只經 `index.ts`、`server.ts`、`schema.ts` 進入；`schema.ts` 只 import `drizzle-orm`（建構函式與 `sql`，不含 driver）與其他 feature 的 `schema.ts`；`features/auth` 不 import 其他 feature；`pg`、`drizzle-orm/node-postgres`、`src/server/db.ts` 只准 `features/*/server/**`、`src/server/**`、`app/api/health/route.ts`；client 側（`index.ts`、`components/**`）不 import 伺服器模組。action 一律用 `authedAction`／`publicAction` 定義，DAL 第一個參數是 `Viewer`。失效條件：兩個 feature 要互相 join 資料表時，改經對方 `server.ts` 取資料。ADR：步驟 6 寫成 repo ADR
 
-拍板順序：D1–D8 與 D2 偏離清單皆已決（2026-11-03）。
+- **D9 記憶體節流計數的總筆數上限**（狀態：未決；擋住步驟：2b 收尾；事實：2b 實測，見下）
+  - 背景：`SignInThrottle` 每組「帳號＋來源」一筆、保留 24 小時，未知帳號也記。實測（假時鐘跑真的 `IPLimiter`＋`SignInThrottle`，scratch 腳本 `measure.mjs`）：預設 `AUTH_RATE_LIMIT_PER_MIN=5` 時，一個來源第一分鐘最多新增 9 筆、一天 7,204 筆；每筆約 333 bytes（V8 heap，10 萬筆取平均），即每個來源每天約 2.4 MB。來源是 IPv4 位址或 IPv6 /64：手上有一個 IPv6 /48 的攻擊者有 65,536 個來源，一天最多約 157 GB，程序會 OOM。Go 版存在 DB，沒有這個問題。
+  - A：不設上限——程式最少；代價是上面的記憶體耗盡風險。
+  - B：設上限（例如 10 萬筆，約 33 MB），滿了就不記新的組合但放行嘗試——不會擋到正常使用者；代價是表被灌滿後，新組合只剩 per-IP 限流，沒有退避。
+  - C：設上限，滿了就拒絕新組合的登入——退避不失效；代價是攻擊者灌滿後，從來沒失敗過的正常使用者全部登不進去（登入 DoS）。
+  - D：設上限，滿了先淘汰最舊的「沒有在等待中」的計數（失敗少於 5 次或等待已過），全部都在等待中才放行而不記——已在退避中的計數不會被淘汰，所以 2a review 擔心的「淘汰別人的計數來重置退避」只剩 4 次以內的部分計數會被清；能灌滿 10 萬筆的攻擊者本來就有上萬個來源、每個來源各有 4 次免費嘗試，淘汰沒有給他更多（建議）。
+  - 結論：（待 Will）
+
+- **D2 偏離清單候選 13**（狀態：未決，2b 提出）：沒有 session 時登出。Go `DELETE /sessions/current` 回 204；這裡 `signOut` 是 `authedAction`，回 `unauthenticated`（不變量第 2 列規定只有註冊與登入是 `publicAction`），帶著失效 cookie 時一樣清掉，使用者看到的結果相同。建議：接受。
+
+拍板順序：D1–D8 與 D2 偏離清單 1–12 皆已決（2026-11-03）；D9 與偏離候選 13 待 Will。
 
 ## 進度
 
@@ -147,7 +158,7 @@
 | 0 spike | 完成 | 2026-11-03：`spike.md`、`auth-parity.md` 產出；orchestrator 重跑 a 的 vitest（20 過）、b 的 integration（各 2 過）、parity 完整性（87 名稱無缺） | a 的 4 個 Docker stack 測試與 c 未由 orchestrator 重跑（機器 load 高；子代理已實測，原始輸出在 `spike.md`）；amd64 未測 | 未 commit（repo 無首個 commit，併入步驟 1） |
 | 1 walking skeleton | 完成 | 2026-11-03：本機 `pnpm check` exit 0（unit 13）；CI run 41581092195 全綠（app 含 integration 8、policy、rename、stack：health 200、en／zh-TW 各 20 個 script 全帶 nonce、uid 1001、app 角色 DDL 被拒；Security 全綠）；mutation：PR #4 health 回 500 → stack job `app is unhealthy` 失敗、integration 測試 `expected 500 to be 200`；PR #5 刪一個 integration 測試 → `tests.integration: 7, locked at 8`；本機 mutation：depcruise 違規、server-only 標頭、noProcessEnv、zizmor unpinned-uses、hadolint、unit 測試數鎖；消費端 `rg` 無結果；獨立 code review 1 blocking＋5 should 已修 | `_global-error` 是靜態頁卻帶 nonce CSP（錯誤頁不 hydrate），記為步驟 2 處理；drizzle-kit 接著 0000 snapshot 產生下一支 migration 由步驟 2 第一個 schema 驗證 | dev `308cf6b` 之後（見 git log） |
 | 2a 資料層與服務層 | 完成 | 2026-11-03：本機 `pnpm check` exit 0（unit 52）；CI run 41591430229 全綠（integration 31、Security 綠）；mutation：本機 argon2 記憶體調到 8 MiB、拿掉同時雜湊上限各讓一個 unit 測試失敗；CI draft PR #6（run 41591010631）四個 mutation（明文 token、登入不刪舊 session、FK 不 cascade、撤銷不檢查擁有者）讓 5 個目標 integration 測試失敗、其餘 25 過；auth-parity 2a 列的 35 個 TS 測試名 `rg` 全找得到；`/code-review high` 10 條（6 修、1 記入 2b、1 接受、2 交 Will），diff 視角審查 1 blocking＋2 should 已修、2 nit 不修；drizzle-kit 接著 0000 產生 0001（步驟 1 留下的未驗收項） | 已決：NFKC 後的長度下限（D2 偏離第 12 條）、登入成功只清該來源的計數（D2 偏離第 11 條）；遠端分支 `ci-mutation/2a-service` 已刪 | dev `8ecd95f`…`8602365` |
-| 2b Server Action 邊界 | 未開始 | | | |
+| 2b Server Action 邊界 | 進行中（驗收已跑完，待 D9） | 2026-11-03：本機 `pnpm check` exit 0（unit 70）；CI run 41612550969 全綠（integration 53、rename、stack、Security 綠）；本機 smoke（`next start`＋`peer.cjs`，不起資料庫）：manifest 正好是 `actions.ts` 的 6 個 action、4 個 authed action 無 cookie 回 `unauthenticated`、不受信任的 peer 偽造 XFF 第 3 次 `rate_limited` 30 秒、跨站 403、`Sec-Fetch-Site: same-origin`＋外站 Origin 被 Next 擋（500）、未登入 GET `/en/dashboard` 307 到 `/en/sign-in`；action 要 POST 到 bundle 了 `actions.ts` 的頁面（harness 用 `/en/sign-in`），轉送路徑的 peer 變成 127.0.0.1、共用一個限流 key（fail-closed，`runtime.ts` 註明 loopback 不可列入 `TRUSTED_PROXIES`）；mutation：本機 proxy 改比 `X-Forwarded-Host`、`signOut` 改 `publicAction`、`export async function`／`export let` 各讓一個 unit 測試失敗，bad `TRUSTED_PROXIES` 的舊寫法讓 runtime 測試失敗；CI draft PR #7（run 41613397037）cookie 拿掉 `httpOnly`＋`allowedOrigins: ["evil.test"]` → 3 個目標 integration 測試失敗、其餘 50 過；auth-parity 2b 列 TS 測試名 `rg` 全找得到；`/code-review high` 10 條：4 修（設定先解析、撤銷大寫 id 清 cookie、`export let/var`、server 依序啟動）、1 記入程式註解（轉送路徑的 peer）、5 不修（已推送 commit 的鎖順序要 force push；settings 時區交 2c；proxy 熱路徑與兩處重複屬 nit） | D9 節流總筆數上限、D2 偏離候選 13 待 Will；request id（auth-parity `TestRequestID*`、`TestSecurityEventsLogged` 的 `request_id`）未做，移到 2c；遠端分支 `ci-mutation/2b-boundary` 待 Will 同意後刪除 | dev `dc20c63`…`f23b447` |
 | 2c 畫面與收尾 | 未開始 | | | |
 | 3 items | 未開始 | | | |
 | 4 帳號濫用與管理 | 延後（D4） | | | |

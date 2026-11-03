@@ -10,7 +10,7 @@
 | API | D2 API 形狀（資源導向 REST、201+Location、cursor、merge-patch、openapi.yaml） | 不適用 | 1 | 計畫 D3=A 只用 Server Actions，沒有 REST 契約；集合的分頁形狀在步驟 3 重新決定 |
 | API | D3 RFC 9457 problem + `type`/`code` | 不適用 | 2 | 沒有 HTTP API；action 回傳型別帶穩定 `code`，next-intl 翻譯（計畫不變量「錯誤走 next-intl」） |
 | API | D4 opaque session（SHA-256、`__Host-session` 屬性、7 日/1 日、登入發新 token、撤銷、不收 Bearer） | 沿用 | 2 | spike §2 實測 `cookies().set` 產出完全相同的屬性；只讀 cookie 自然不收 Bearer |
-| API | D5 CSRF：`http.CrossOriginProtection` | 偏離（選項 A）或沿用（選項 B），待 Will | 1 | Next 內建只比 Origin 且信任 `X-Forwarded-Host`（spike §3）；選項 B 在 proxy.ts 實作同語意，已原型並全案例通過 |
+| API | D5 CSRF：`http.CrossOriginProtection` | 沿用（選項 B，D2 偏離清單第 1 條，Will 2026-11-03） | 2 | Next 內建只比 Origin 且信任 `X-Forwarded-Host`（spike §3）；選項 B 在 proxy.ts 實作同語意，已原型並全案例通過 |
 | API | D6a 密碼 15–128、無組合規則、外洩清單、NFKC、username 小寫唯一 | 沿用 | 2 | 純邏輯，可直接移植 |
 | API | D6b argon2id m=19 MiB t=2 p=1、限制同時雜湊數 | 沿用 | 2 | spike §1：`@node-rs/argon2` 在 Node 與兩種 image 都可用，編碼字串與 Go 相同前綴 |
 | API | D6c 依帳號節流（2026-10-22 起為帳號＋來源）+ per-IP 限流 | 偏離（存放處：程序記憶體而非 DB；D7=A 已決） | 2 | spike §5 單程序實測行為與 Go 相同；多實例時失效（D7 重開條件） |
@@ -35,7 +35,7 @@
 |---|---|---|---|---|
 | TestMain | httpapi/auth_test.go | 不適用：Go `dbtest.Main` 的測試基礎設施；TS 用 vitest globalSetup 加 testcontainers | 2 | |
 | TestOperationsRejectsUnknownName | httpapi/auth_test.go | 不適用：檢查 oapi-codegen 產生的 operation 名稱，沒有 openapi 就沒有這個風險 | 2 | |
-| TestCreateUserSetsSessionCookie | httpapi/auth_test.go | 沿用（cookie 屬性、43 字元 token、小寫 account；`Location` 與 RFC 3339 斷言不適用，因為沒有 REST） | 2 | `test/integration/auth.test.ts` "creates a lowercase user, signs it in and stores only the token's SHA-256"（cookie 屬性由 2b 補） |
+| TestCreateUserSetsSessionCookie | httpapi/auth_test.go | 沿用（cookie 屬性、43 字元 token、小寫 account；`Location` 與 RFC 3339 斷言不適用，因為沒有 REST） | 2 | `test/integration/auth.test.ts` "creates a lowercase user, signs it in and stores only the token's SHA-256"；`test/integration/actions.test.ts` "the session cookie > is __Host-, Secure, HttpOnly, SameSite=Lax, for seven days, and holds a 43-character token" |
 | TestCreateUserDuplicate | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "refuses a username that differs only in case" |
 | TestCreateUserConcurrentSameAccount | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "lets exactly one of ten concurrent sign-ups of the same username through" |
 | TestCreateUserPasswordTooShort | httpapi/auth_test.go | 偏離：下限以 NFKC 後的長度計（D2 偏離清單第 12 條）；其餘沿用 | 2 | `src/features/auth/__tests__/credentials.test.ts` "rejects a 14-character password"、"counts the minimum after NFKC, which can shorten a password"；`test/integration/auth.test.ts` "rejects a password on the common-password list and a too-short one" |
@@ -52,23 +52,23 @@
 | TestMe | httpapi/auth_test.go | 沿用（UUIDv7 id、username，改由頁面或 action 讀取；`role` 欄只有 admin 用得到，隨 F5 延後） | 2 | `test/integration/auth.test.ts` "authenticates a live token and nothing else"（頁面讀取由 2c 補） |
 | TestMeWithoutCookie | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "authenticates a live token and nothing else" |
 | TestMeWithUnknownToken | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "authenticates a live token and nothing else" |
-| TestInvalidSessionCookieCleared | httpapi/auth_test.go | 偏離：Next 不允許 render 期間（server component）設定 cookie（官方 data-security 指南「Avoiding side-effects during rendering」），所以用 GET 開頁時清不掉失效的 cookie；只能在 proxy.ts 或 action 回應裡清。見 D2 偏離清單候選 #5 | 2 | |
-| TestMeIgnoresBearer | httpapi/auth_test.go | 沿用 | 2 | |
+| TestInvalidSessionCookieCleared | httpapi/auth_test.go | 偏離（D2 偏離清單第 5 條）：action 遇到失效 cookie 回 `unauthenticated` 並清掉；頁面（server component）不能寫 cookie，`requireSession()` 改導到 GET `/api/session/expired`，它只在 session 確實失效時清 cookie 再導回登入頁 | 2 | `test/integration/actions.test.ts` "the session cookie > is cleared when it is dead, and a sign-in with it gets only the new one"；"the session cookie > is cleared by the sign-in redirect only when its session is dead" |
+| TestMeIgnoresBearer | httpapi/auth_test.go | 沿用 | 2 | `test/integration/actions.test.ts` "the session cookie > is the only credential: a Bearer token is ignored" |
 | TestMeDisabledAccount | httpapi/auth_test.go | 沿用（停用隨 F5 延後） | 4 | |
 | TestMeAfterUserDeleted | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "deletes the user and its sessions within ten minutes of signing in, and asks to sign in again after" |
 | TestSessionIdleExpiry | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "ends a session idle for a day and one older than seven days" |
 | TestSessionAbsoluteExpiry | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "ends a session idle for a day and one older than seven days" |
-| TestDeleteCurrentSessionClearsCookie | httpapi/auth_test.go | 沿用 | 2 | |
+| TestDeleteCurrentSessionClearsCookie | httpapi/auth_test.go | 沿用（有 session 時清 cookie，`Max-Age=0`）；偏離候選：沒有 session 時 Go 回 204，這裡 `signOut` 是 `authedAction`，回 `unauthenticated`，帶著失效 cookie 時一樣清掉（不變量第 2 列：只有註冊與登入是 `publicAction`），待 Will 確認 | 2 | `test/integration/actions.test.ts` "the session cookie > is cleared when it is dead, and a sign-in with it gets only the new one"（有 session 的登出回 `Max-Age=0`）；"every Server Action in the build > refuses a request without a session, except sign-up and sign-in"（沒有 session 的登出） |
 | TestDeleteCurrentSessionRevokes | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "signs out the current session and, everywhere, all of them" |
 | TestDeleteAllSessions | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "signs out the current session and, everywhere, all of them" |
 | TestAdminDisablesUserRevokesSessions | httpapi/auth_test.go | 沿用 | 4 | |
 | TestLastAdminCannotBeDisabled | httpapi/auth_test.go | 沿用 | 4 | |
 | TestConcurrentAdminDisableLeavesOne | httpapi/auth_test.go | 沿用 | 4 | |
 | TestNonAdminCannotPatchUser | httpapi/auth_test.go | 沿用 | 4 | |
-| TestUnauthenticatedBeforeValidation | httpapi/auth_test.go | 沿用（每個 action 先 `requireSession()` 再做 zod 驗證） | 2 | |
-| TestLoginThrottlePerAccount | httpapi/auth_test.go | 偏離：登入成功只清該來源的計數（D2 偏離清單第 11 條）；其餘沿用（記憶體實作；`retryAfter` 由 2b 補） | 2 | `test/integration/auth.test.ts` "throttles a username from one source after five failures, not the owner elsewhere"（action 回傳 `retryAfter` 由 2b 補） |
+| TestUnauthenticatedBeforeValidation | httpapi/auth_test.go | 沿用（每個 action 先 `requireSession()` 再做 zod 驗證） | 2 | `test/integration/actions.test.ts` "the session cookie > is checked before the arguments are"；`src/__tests__/server-actions.test.ts` "are each made by authedAction or publicAction, and only sign-up and sign-in are public" |
+| TestLoginThrottlePerAccount | httpapi/auth_test.go | 偏離：登入成功只清該來源的計數（D2 偏離清單第 11 條）；其餘沿用（記憶體實作；action 回傳 `retryAfterSeconds`） | 2 | `test/integration/auth.test.ts` "throttles a username from one source after five failures, not the owner elsewhere"；`test/integration/actions.test.ts` "sign-in throttling > answers the sixth failure from one client with the minutes to wait" |
 | TestLoginThrottleConcurrent | httpapi/auth_test.go | 沿用（spike §5：20 個同時送 → 5 個檢查密碼、15 個被節流、只做 5 次雜湊） | 2 | `test/integration/auth.test.ts` "checks five passwords out of twenty concurrent attempts and throttles the rest" |
-| TestRateLimitAuthOperations | httpapi/auth_test.go | 沿用 | 2 | |
+| TestRateLimitAuthOperations | httpapi/auth_test.go | 沿用 | 2 | `test/integration/actions.test.ts` "the per-IP limit > allows two sign-ups and two sign-ins a minute per client, then asks to retry in 30 seconds" |
 | TestCredentialsNeverLogged | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "logs sign-up, sign-in, failures and sign-out with user ids, never the password, token or unknown username"（action 層與 cookie 值由 2b 補） |
 | TestSecurityEventsLogged | httpapi/auth_test.go | 沿用（`authz.denied` 那一筆來自 admin 操作，步驟 4 補上） | 2 | `test/integration/auth.test.ts` "logs sign-up, sign-in, failures and sign-out with user ids, never the password, token or unknown username"（`request_id` 由 2b 補） |
 | TestGetUser | httpapi/auth_resources_test.go | 沿用（讀取他人帳號只有 admin 需要；本人的部分由 TestMe 涵蓋） | 4 | |
@@ -84,9 +84,9 @@
 | TestDeleteCurrentUser | httpapi/auth_resources_test.go | 沿用（items 的斷言在步驟 3 加上，稽核列在步驟 4 加上） | 2 | `test/integration/auth.test.ts` "deletes the user and its sessions within ten minutes of signing in, and asks to sign in again after" |
 | TestDeleteCurrentUserLastAdmin | httpapi/auth_resources_test.go | 沿用 | 4 | |
 | TestAdminDeletesUser | httpapi/auth_resources_test.go | 沿用 | 4 | |
-| TestRateLimitPerIPBehindTrustedProxy | httpapi/ratelimit_test.go | 沿用 | 2 | |
-| TestRateLimitIgnoresXFFFromUntrustedPeer | httpapi/ratelimit_test.go | 沿用（選項 P：preload 補上 peer）／偏離（選項 N：只靠網路隔離，app 層無從判斷 peer），待 Will；見 D2 偏離清單候選 #3 | 2 | |
-| TestRateLimitOnlyNamedOperations | httpapi/ratelimit_test.go | 沿用（只有註冊與登入的 action 受限） | 2 | |
+| TestRateLimitPerIPBehindTrustedProxy | httpapi/ratelimit_test.go | 沿用 | 2 | `test/integration/actions.test.ts` "the per-IP limit > gives each client behind the trusted proxy its own bucket" |
+| TestRateLimitIgnoresXFFFromUntrustedPeer | httpapi/ratelimit_test.go | 沿用（D2 偏離清單第 3 條選 P：`peer.cjs` preload 補上 TCP peer） | 2 | `test/integration/actions.test.ts` "the per-IP limit > ignores X-Forwarded-For from a peer it does not trust"；"the per-IP limit > ignores an x-peer-address the client sends: the preload writes the real one" |
+| TestRateLimitOnlyNamedOperations | httpapi/ratelimit_test.go | 沿用（只有註冊與登入的 action 受限） | 2 | `test/integration/actions.test.ts` "the per-IP limit > limits only sign-up and sign-in" |
 | TestIPLimiterRefillsAndSweeps | httpapi/ratelimit_test.go | 沿用（spike `test/unit.test.ts` 已移植並通過） | 2 | `src/features/auth/__tests__/throttle.test.ts` "refills a bucket over time and drops buckets idle for a minute" |
 | TestIPLimiterKeysIPv6By64 | httpapi/ratelimit_test.go | 沿用（spike 已移植並通過） | 2 | `src/features/auth/__tests__/throttle.test.ts` "limits an IPv6 /64 as one client" |
 | TestSignInThrottlePerClient | httpapi/throttle_test.go | 偏離：登入成功只清該來源的計數（D2 偏離清單第 11 條）；其餘沿用 | 2 | `src/features/auth/__tests__/throttle.test.ts` "counts each source on its own and clears only the source that signed in"；`test/integration/auth.test.ts` "throttles a username from one source after five failures, not the owner elsewhere" |
@@ -99,11 +99,11 @@
 | TestReadyDBDown | httpapi/server_test.go | 沿用（回 503；problem 主體不適用） | 1 | |
 | TestShutdownFinishesInFlightRequest | httpapi/server_test.go | 沿用（Next standalone 的 SIGTERM 行為待 0 (c) 實測） | 1 | |
 | TestBodyTooLarge | httpapi/server_test.go | 偏離：大小上限改用 Next 內建的 `serverActions.bodySizeLimit`（預設 1 MB），錯誤回應的形狀由 Next 決定，不是 413 problem | 1 | |
-| TestCrossOriginPostRejected/cross-site | httpapi/server_test.go | 選項 A 偏離：Next 內建檢查放行（spike 實測已執行）；瀏覽器跨站 POST 一定帶 Origin，標不適用。選項 B 沿用：proxy Fetch Metadata 擋下（實測） | 1 | |
-| TestCrossOriginPostRejected/same-site sibling | httpapi/server_test.go | 選項 A 偏離：Next 放行（實測）；理由同上。選項 B 沿用：擋下（實測） | 1 | |
-| TestCrossOriginPostRejected/foreign Origin without Sec-Fetch-Site | httpapi/server_test.go | 沿用：Next 內建檢查擋下（實測未執行，狀態 500，不是 403）；選項 B 擋下並回 403 | 1 | |
-| TestCrossOriginPostRejected/same-origin | httpapi/server_test.go | 沿用（兩個選項都放行，實測） | 1 | |
-| TestCrossOriginPostRejected/non-browser client | httpapi/server_test.go | 沿用（兩個選項都放行，實測；fetch action 不帶 Origin 時沒有記任何警告） | 1 | |
+| TestCrossOriginPostRejected/cross-site | httpapi/server_test.go | 沿用（D2 偏離清單第 1 條選 B：`src/proxy.ts` `crossOrigin()`，跨來源回 403；Next 內建 Origin 檢查保留為第二層） | 2 | `src/__tests__/csrf.test.ts` "cross-origin protection > cross-site: blocked …"；`test/integration/actions.test.ts` "cross-origin protection > cross-site: executed …" |
+| TestCrossOriginPostRejected/same-site sibling | httpapi/server_test.go | 沿用（D2 偏離清單第 1 條選 B：`src/proxy.ts` `crossOrigin()`，跨來源回 403；Next 內建 Origin 檢查保留為第二層） | 2 | `src/__tests__/csrf.test.ts` "cross-origin protection > same-site sibling: blocked …"；`test/integration/actions.test.ts` "cross-origin protection > same-site sibling: executed …" |
+| TestCrossOriginPostRejected/foreign Origin without Sec-Fetch-Site | httpapi/server_test.go | 沿用（D2 偏離清單第 1 條選 B：`src/proxy.ts` `crossOrigin()`，跨來源回 403；Next 內建 Origin 檢查保留為第二層） | 2 | `src/__tests__/csrf.test.ts` "cross-origin protection > foreign Origin without Sec-Fetch-Site: blocked …"；`test/integration/actions.test.ts` "cross-origin protection > foreign Origin without Sec-Fetch-Site: executed …" |
+| TestCrossOriginPostRejected/same-origin | httpapi/server_test.go | 沿用（D2 偏離清單第 1 條選 B：`src/proxy.ts` `crossOrigin()`，跨來源回 403；Next 內建 Origin 檢查保留為第二層） | 2 | `src/__tests__/csrf.test.ts` "cross-origin protection > same-origin: blocked …"；`test/integration/actions.test.ts` "cross-origin protection > same-origin: executed …" |
+| TestCrossOriginPostRejected/non-browser client | httpapi/server_test.go | 沿用（D2 偏離清單第 1 條選 B：`src/proxy.ts` `crossOrigin()`，跨來源回 403；Next 內建 Origin 檢查保留為第二層） | 2 | `src/__tests__/csrf.test.ts` "cross-origin protection > non-browser client: blocked …"；`test/integration/actions.test.ts` "cross-origin protection > non-browser client: executed …" |
 | TestSlowHeaderClosed | httpapi/server_test.go | 偏離：Node http server 的 `headersTimeout`／`requestTimeout` 用預設值，standalone `server.js` 沒有設定入口；慢速攻擊（slowloris）由前面的 Caddy 處理 | 1 | |
 | TestUnknownPathNotFound | httpapi/server_test.go | 沿用（Next 的 not-found；problem 主體不適用） | 1 | |
 | TestRequestIDFromTrustedProxy | httpapi/middleware_test.go | 沿用（Caddy 送 `X-Request-ID`，proxy.ts 驗證格式後傳給 render；信任判斷與候選 #3 相同） | 1 | |
