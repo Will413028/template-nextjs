@@ -1,0 +1,23 @@
+CREATE TABLE "sessions" (
+	"token_hash" "bytea" PRIMARY KEY NOT NULL,
+	"id" uuid DEFAULT uuidv7() NOT NULL,
+	"user_id" uuid NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	"last_used_at" timestamp with time zone NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "sessions_token_hash_check" CHECK (octet_length("sessions"."token_hash") = 32)
+);
+--> statement-breakpoint
+CREATE TABLE "users" (
+	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
+	"username" text NOT NULL,
+	"password_hash" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "users_username_key" UNIQUE("username"),
+	CONSTRAINT "users_username_check" CHECK ("users"."username" = lower("users"."username") AND char_length("users"."username") BETWEEN 3 AND 50)
+);
+--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "sessions_id_key" ON "sessions" USING btree ("id");--> statement-breakpoint
+CREATE INDEX "sessions_user_id_id_idx" ON "sessions" USING btree ("user_id","id" DESC NULLS FIRST);
