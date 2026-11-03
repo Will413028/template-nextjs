@@ -17,16 +17,22 @@ function files(dir: string): string[] {
 }
 
 const serverModule =
-  /^(server\/.+|features\/[^/]+\/server\.ts|features\/[^/]+\/server\/.+)\.tsx?$/;
+  /^(server\/.+|features\/[^/]+\/server|features\/[^/]+\/server\/.+)\.tsx?$/;
 
 const serverModules = files(SRC).filter(
   (f) => serverModule.test(f) && !f.includes("__tests__"),
 );
 
 describe("server modules", () => {
-  it("include the database and server configuration", () => {
+  // one of each kind the pattern names, so a pattern that stops matching one fails here (it once missed server.ts)
+  it("include the kernel, a feature's server.ts and its server/ modules", () => {
     expect(serverModules).toEqual(
-      expect.arrayContaining(["server/db.ts", "server/env.ts"]),
+      expect.arrayContaining([
+        "server/db.ts",
+        "server/env.ts",
+        "features/auth/server.ts",
+        "features/auth/server/service.ts",
+      ]),
     );
   });
 
