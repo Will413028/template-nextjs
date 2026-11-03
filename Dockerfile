@@ -14,6 +14,11 @@ FROM pnpm AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
+# production dependencies only, for the migrate image: drizzle-orm and pg, none of the dev tooling
+FROM pnpm AS prod-deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+
 # make dev: next dev with installed dependencies; docker-compose.dev.yml mounts src/ and messages/ over the copy so
 # edits reload
 FROM deps AS dev
@@ -25,8 +30,7 @@ CMD ["pnpm", "dev"]
 # bundles drizzle-orm into .next and carries no migrator). Node.js runs the TypeScript file by stripping its types.
 FROM base AS migrate
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY migrations ./migrations
 COPY scripts/migrate.mts ./scripts/migrate.mts
 USER 1001:1001
