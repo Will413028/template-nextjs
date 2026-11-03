@@ -60,7 +60,14 @@ export const revokeSession = authedAction(
       viewer,
       typeof id === "string" ? id : "",
     );
-    if (result.ok && id === viewer.sessionId) await clearSessionCookie();
+    // UUIDs compare case-insensitively in PostgreSQL, so the current session may come back in capitals
+    if (
+      result.ok &&
+      typeof id === "string" &&
+      id.toLowerCase() === viewer.sessionId
+    ) {
+      await clearSessionCookie();
+    }
     return result;
   },
 );

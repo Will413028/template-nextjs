@@ -38,19 +38,22 @@ beforeAll(async () => {
     DATABASE_URL: database.url(APP),
     DATABASE_PASSWORD_FILE: database.appPasswordFile,
   };
-  [main, limited, untrusted] = await Promise.all([
-    startNext({
-      ...env,
-      TRUSTED_PROXIES: "127.0.0.1/32",
-      AUTH_RATE_LIMIT_PER_MIN: "1000",
-    }),
-    startNext({
-      ...env,
-      TRUSTED_PROXIES: "127.0.0.1/32",
-      AUTH_RATE_LIMIT_PER_MIN: "2",
-    }),
-    startNext({ ...env, TRUSTED_PROXIES: "", AUTH_RATE_LIMIT_PER_MIN: "2" }),
-  ]);
+  // one at a time: each binds its port before the next one picks a free port
+  main = await startNext({
+    ...env,
+    TRUSTED_PROXIES: "127.0.0.1/32",
+    AUTH_RATE_LIMIT_PER_MIN: "1000",
+  });
+  limited = await startNext({
+    ...env,
+    TRUSTED_PROXIES: "127.0.0.1/32",
+    AUTH_RATE_LIMIT_PER_MIN: "2",
+  });
+  untrusted = await startNext({
+    ...env,
+    TRUSTED_PROXIES: "",
+    AUTH_RATE_LIMIT_PER_MIN: "2",
+  });
 }, 180_000);
 
 afterAll(async () => {
@@ -115,9 +118,11 @@ describe("every Server Action in the build", () => {
       }
     });
   const declared = actionFiles.flatMap((file) =>
-    [...readFileSync(file, "utf8").matchAll(/^export const (\w+)/gm)].map(
-      (m) => `${file}#${m[1]}`,
-    ),
+    [
+      ...readFileSync(file, "utf8").matchAll(
+        /^export\s+(?:const|let|var|async function|function)\s+(\w+)/gm,
+      ),
+    ].map((m) => `${file}#${m[1]}`),
   );
   const PUBLIC = [
     "src/features/auth/actions.ts#signUp",
@@ -207,6 +212,27 @@ describe("the session cookie", () => {
       cookie: cookieValue(signIn.setCookie, COOKIE),
     });
     expect(cleared(live)).toBeUndefined();
+  });
+
+  it("is cleared when the session revoked is its own, whatever the id's case", async () => {
+    const { token } = await signUp();
+    const page = await fetch(`${main.base}/en/settings`, {
+      headers: { Cookie: `${COOKIE}=${token}` },
+    });
+    const own = /name="id" value="([0-9a-f-]{36})"/.exec(
+      await page.text(),
+    )?.[1];
+    expect(own).toBeDefined();
+    const revoke = await call(
+      main,
+      "revokeSession",
+      [null, { id: own?.toUpperCase() }],
+      {
+        cookie: token,
+      },
+    );
+    expect(revoke.result).toEqual({ ok: true });
+    expect(cleared(revoke)).toMatch(/Max-Age=0/);
   });
 
   it("is checked before the arguments are", async () => {
