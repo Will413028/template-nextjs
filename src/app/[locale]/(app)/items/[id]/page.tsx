@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { requireSession } from "@/features/auth/server";
 import { DeleteItemButton, ItemForm } from "@/features/items";
@@ -20,7 +19,7 @@ export default async function ItemPage({
 }) {
   const viewer = await requireSession();
   const item = await getItem(viewer, (await params).id);
-  if (!item) notFound();
+  if (!item) return null;
   const t = await getTranslations("items");
   return (
     <div className="flex flex-col gap-10">

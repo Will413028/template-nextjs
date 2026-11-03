@@ -13,7 +13,8 @@ function fields(input: unknown): {
   id: string;
   rest: Record<string, unknown>;
 } {
-  const object = fromForm(input);
+  const object =
+    input instanceof FormData ? Object.fromEntries(input) : fromForm(input);
   if (!object || typeof object !== "object") return { id: "", rest: {} };
   const { id, ...rest } = object as Record<string, unknown>;
   return { id: typeof id === "string" ? id : "", rest };

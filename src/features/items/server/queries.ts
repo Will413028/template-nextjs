@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Viewer } from "@/features/auth/server";
 import { type Database, db } from "@/server/db";
@@ -80,7 +80,7 @@ export function itemQueries(db: Database) {
         .where(
           and(
             eq(items.ownerId, viewer.userId),
-            after === undefined ? undefined : lt(items.id, after),
+            after === undefined ? undefined : lte(items.id, after),
           ),
         )
         .orderBy(desc(items.id))
