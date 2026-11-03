@@ -67,6 +67,8 @@ export type AuthServiceOptions = {
   now?: Clock;
   hasher?: PasswordHasher;
   throttle?: SignInThrottle;
+  // the counted pairs the service's own throttle keeps at most (tests set it low to fill it)
+  throttleMaxEntries?: number;
   log?: SecurityLog;
   sessionAbsoluteMs?: number;
   sessionIdleMs?: number;
@@ -92,6 +94,7 @@ export function createAuthService(options: AuthServiceOptions) {
   const throttle =
     options.throttle ??
     new SignInThrottle(now, {
+      maxEntries: options.throttleMaxEntries,
       onFull: (uncounted) =>
         log("auth.sign_in_throttle_full", { uncounted: String(uncounted) }),
     });

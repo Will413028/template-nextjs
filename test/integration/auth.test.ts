@@ -274,6 +274,24 @@ describe("sign-in", () => {
 });
 
 describe("sign-in throttling", () => {
+  it("logs a sign-in it could not count because every count is in its backoff", async () => {
+    const { auth, logs } = setup({ throttleMaxEntries: 1 });
+    const attempt = (username: string, source: string) =>
+      auth.signIn({ username, password: "not the password" }, { source });
+    const first = name("full");
+    for (let i = 0; i < 5; i++) await attempt(first, SOURCE);
+    // the one slot holds a pair in its backoff, which is never evicted: a new pair goes ahead uncounted
+    expect(await attempt(name("other"), "192.0.2.2")).toEqual({
+      ok: false,
+      code: "invalid_credentials",
+    });
+    expect(
+      logs.filter((line) => line.event === "auth.sign_in_throttle_full"),
+    ).toEqual([
+      { event: "auth.sign_in_throttle_full", fields: { uncounted: "1" } },
+    ]);
+  });
+
   it("throttles a username from one source after five failures, not the owner elsewhere", async () => {
     const { auth, signUp, advance } = setup();
     const username = name("frank");
