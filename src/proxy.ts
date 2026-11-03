@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import createMiddleware from "next-intl/middleware";
 import { routing } from "@/i18n/routing";
 import { isDevelopment } from "@/lib/env";
@@ -23,8 +23,37 @@ export function cspFor(nonce: string): string {
   ].join("; ");
 }
 
-// Proxy (Next.js 16's name for middleware, Node.js runtime): locale routing and a fresh CSP nonce per page.
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+// Go's http.CrossOriginProtection (ADR api-and-auth D5; plan D2 deviation 1): Sec-Fetch-Site decides when a browser
+// sends it; otherwise the Origin's host must equal Host. Never X-Forwarded-Host: Next.js believes it from any client
+// that reaches it directly (step 0 (a) §3). A request with neither header is not from a browser, so it carries no
+// victim's cookie, and passes. Next.js's own Origin check on Server Actions stays as a second layer.
+export function crossOrigin(request: Request): boolean {
+  if (SAFE_METHODS.has(request.method)) return false;
+  const site = request.headers.get("sec-fetch-site");
+  if (site) return site !== "same-origin" && site !== "none";
+  const origin = request.headers.get("origin");
+  if (origin === null) return false;
+  try {
+    return new URL(origin).host !== request.headers.get("host");
+  } catch {
+    // "null" (a sandboxed or privacy-sensitive context) and anything else that is not a URL
+    return true;
+  }
+}
+
+// The paths next-intl routes and the CSP covers: pages, not /api, /_next or files.
+const PAGE = /^\/(?!api(?:\/|$)|_next(?:\/|$)|.*\..*)/;
+
+// Proxy (Next.js 16's name for middleware, Node.js runtime): cross-origin protection on every path, then locale
+// routing and a fresh CSP nonce for pages.
 export default function proxy(request: NextRequest) {
+  if (crossOrigin(request)) {
+    return new NextResponse("cross-origin request", { status: 403 });
+  }
+  if (!PAGE.test(request.nextUrl.pathname)) return NextResponse.next();
+
   // next dev needs eval and its own inline scripts; the policy is for builds.
   if (isDevelopment()) return intlMiddleware(request);
 
@@ -37,5 +66,7 @@ export default function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next|.*\\..*).*)"],
+  // Every path but the build's static files: a Server Action can be posted to any path, one that does not exist
+  // included (step 0 (a) §4), so the cross-origin check cannot be limited to pages.
+  matcher: ["/((?!_next/static|_next/image).*)"],
 };
