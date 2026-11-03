@@ -35,7 +35,6 @@ REPO_PATTERN = re.compile(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+")
 
 def rename(text: str, name: str, repo: str) -> str:
     old_db = OLD_NAME.replace("-", "_")
-    text = text.replace(OLD_REPO, repo)
     # the database and its roles: unquoted SQL identifiers, so underscores instead of hyphens
     text = text.replace(old_db, name.replace("-", "_"))
     return text.replace(OLD_NAME, name)
