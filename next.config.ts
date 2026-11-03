@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // Do not announce the framework (X-Powered-By: Next.js).
   poweredByHeader: false,
+  // Read at runtime (src/features/auth/server/password.ts), so file tracing cannot see it from the imports.
+  outputFileTracingIncludes: {
+    "/**": ["./src/features/auth/server/common-passwords.txt"],
+  },
   // cacheComponents stays off: a prerendered shell carries scripts without this request's nonce, which the CSP's
   // 'strict-dynamic' blocks, so the page never hydrates (Next.js CSP guide: PPR is incompatible with nonces).
   async headers() {
