@@ -101,7 +101,8 @@ export function createAuthService(options: AuthServiceOptions) {
   const throttle =
     options.throttle ??
     new SignInThrottle(now, {
-      onFull: () => log("auth.sign_in_throttle_full", {}),
+      onFull: (uncounted) =>
+        log("auth.sign_in_throttle_full", { uncounted: String(uncounted) }),
     });
   const absoluteMs = options.sessionAbsoluteMs ?? 7 * DAY;
   const idleMs = options.sessionIdleMs ?? DAY;

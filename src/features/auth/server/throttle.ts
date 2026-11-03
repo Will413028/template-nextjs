@@ -82,8 +82,9 @@ type Partial = Count & { key: string; older?: Partial; newer?: Partial };
 
 export type SignInThrottleOptions = {
   maxEntries?: number;
-  // Called at most once a minute while a new pair's attempt goes ahead uncounted because the map is full.
-  onFull?: () => void;
+  // Called at most once a minute while a new pair's attempt goes ahead uncounted because the map is full, with the
+  // number of such attempts since the last call (this one included).
+  onFull?: (uncounted: number) => void;
 };
 
 // Exponential backoff per username and source (template-go-nextjs ADR account-abuse-and-lifecycle D4a): each source
@@ -105,8 +106,9 @@ export class SignInThrottle {
   // Pairs with FREE or more failures; never evicted.
   private readonly backoff = new Map<string, Count>();
   private readonly maxEntries: number;
-  private readonly onFull: () => void;
+  private readonly onFull: (uncounted: number) => void;
   private lastFullReport = Number.NEGATIVE_INFINITY;
+  private uncounted = 0;
 
   constructor(
     private readonly now: Clock,
@@ -130,10 +132,7 @@ export class SignInThrottle {
     }
     if (!count && this.size >= this.maxEntries) {
       if (!this.oldest) {
-        if (now - this.lastFullReport >= MINUTE) {
-          this.lastFullReport = now;
-          this.onFull();
-        }
+        this.reportFull(now);
         return 0;
       }
       this.removePartial(this.oldest.key);
@@ -143,10 +142,10 @@ export class SignInThrottle {
       failures >= FREE
         ? Math.min(2 ** Math.min(failures - FREE, 6), 60) * MINUTE
         : 0;
-    const next = { failures, nextAllowedAt: now + wait, updatedAt: now };
-    this.removePartial(key);
+    const next = { key, failures, nextAllowedAt: now + wait, updatedAt: now };
+    if (count) this.removePartial(key);
     if (failures >= FREE) this.backoff.set(key, next);
-    else this.appendPartial({ ...next, key });
+    else this.appendPartial(next);
     return 0;
   }
 
@@ -178,6 +177,16 @@ export class SignInThrottle {
       }
     }
     return dropped;
+  }
+
+  private reportFull(now: number): void {
+    this.uncounted++;
+    // a clock stepped back reports at once rather than staying silent until it catches up
+    if (now - this.lastFullReport >= MINUTE || now < this.lastFullReport) {
+      this.lastFullReport = now;
+      this.onFull(this.uncounted);
+      this.uncounted = 0;
+    }
   }
 
   private appendPartial(node: Partial): void {

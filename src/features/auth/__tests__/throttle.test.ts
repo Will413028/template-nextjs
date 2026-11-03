@@ -109,6 +109,29 @@ describe("SignInThrottle", () => {
     expect(throttle.reserve("c", "192.0.2.1")).toBeGreaterThan(0);
   });
 
+  it("reports uncounted attempts at most once a minute, with how many went uncounted", () => {
+    let now = 0;
+    const reports: number[] = [];
+    const throttle = new SignInThrottle(() => now, {
+      maxEntries: 1,
+      onFull: (uncounted) => reports.push(uncounted),
+    });
+    for (let n = 0; n < 5; n++) throttle.reserve("a", "192.0.2.1");
+    for (const username of ["b", "c", "d"]) {
+      throttle.reserve(username, "192.0.2.1");
+    }
+    expect(reports).toEqual([1]);
+    now = MINUTE - 1;
+    throttle.reserve("e", "192.0.2.1");
+    expect(reports).toEqual([1]);
+    now = MINUTE;
+    throttle.reserve("f", "192.0.2.1");
+    expect(reports).toEqual([1, 4]);
+    now = 0; // the clock stepped back
+    throttle.reserve("g", "192.0.2.1");
+    expect(reports).toEqual([1, 4, 1]);
+  });
+
   it.each([0, -1, 1.5, Number.NaN])("refuses maxEntries %s", (maxEntries) => {
     expect(() => new SignInThrottle(Date.now, { maxEntries })).toThrow(
       "maxEntries must be a positive integer",
