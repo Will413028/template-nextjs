@@ -4,7 +4,7 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { type DatabaseConfig, databaseConfig } from "./env";
 
-// The app role's connection pool: DML only (deploy/postgres/initdb/10-roles.sh; scripts/migrate.mjs grants it).
+// The app role's connection pool: DML only (deploy/postgres/initdb/10-roles.sh; scripts/migrate.mts grants it).
 // Features query through their own server/ modules with Drizzle's query builder; this module knows no schema.
 
 export type Database = NodePgDatabase;

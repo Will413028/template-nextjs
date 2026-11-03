@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   PostgreSqlContainer,
   type StartedPostgreSqlContainer,
@@ -12,10 +13,9 @@ import { migrateDatabase } from "../../scripts/migrate.mts";
 // the tests see the production permissions: migrations as the owner, queries as the app role.
 const IMAGE =
   "postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336";
-const ROLES_SCRIPT = new URL(
-  "../../deploy/postgres/initdb/10-roles.sh",
-  import.meta.url,
-).pathname;
+const ROLES_SCRIPT = fileURLToPath(
+  new URL("../../deploy/postgres/initdb/10-roles.sh", import.meta.url),
+);
 
 const DATABASE = "template_nextjs";
 export const OWNER = "template_nextjs_owner";

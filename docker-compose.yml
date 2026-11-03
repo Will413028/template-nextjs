@@ -33,7 +33,9 @@ services:
       # runs only when the volume is empty; on an existing volume the roles must already exist
       - ./deploy/postgres/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      # over TCP: while initdb runs, the image's temporary server listens on the unix socket only, and migrate
+      # connects over TCP
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 3s
       retries: 5

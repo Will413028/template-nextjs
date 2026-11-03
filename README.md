@@ -13,8 +13,8 @@ make init-env                   # .env and the database password files in .secre
 make up                         # http://localhost
 ```
 
-`make dev` runs `next dev` inside the stack on http://localhost:3000. `pnpm check` runs every check CI runs (Node.js
-26, pnpm from `packageManager`, Docker for the integration tests).
+`make dev` runs `next dev` inside the stack on http://localhost:3000. `pnpm check` runs CI's checks except the ones that
+start containers (Node.js 26, pnpm from `packageManager`); CI also runs `pnpm test:integration` and the compose stack.
 
 The project is disconnected from the template after `make rename`: later template fixes do not reach it.
 

@@ -8,6 +8,7 @@
 // Drizzle's migrator applies every pending migration in one transaction, so a failure leaves none of them applied,
 // and CREATE INDEX CONCURRENTLY cannot run (squawk rejects it, .squawk.toml).
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
@@ -19,7 +20,7 @@ export type MigrateOptions = {
   migrationsFolder?: string;
 };
 
-const MIGRATIONS = new URL("../migrations", import.meta.url).pathname;
+const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 
 export async function migrateDatabase(options: MigrateOptions): Promise<void> {
   // pg lets a connectionString override a separately given password, so the URL is split into fields.

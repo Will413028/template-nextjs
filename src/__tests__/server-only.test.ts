@@ -1,11 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // Server modules start with `import "server-only"`: a client component that reaches one, even through other modules,
 // fails `next build` instead of shipping database or session code to the browser. dependency-cruiser checks direct
 // imports; this marker covers the rest.
-const SRC = new URL("..", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("..", import.meta.url));
 
 function files(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
@@ -16,7 +17,7 @@ function files(dir: string): string[] {
 }
 
 const serverModule =
-  /^(server\/[^/]+\.ts|features\/[^/]+\/server\.ts|features\/[^/]+\/server\/.+\.ts)$/;
+  /^(server\/.+|features\/[^/]+\/server\.ts|features\/[^/]+\/server\/.+)\.tsx?$/;
 
 const serverModules = files(SRC).filter(
   (f) => serverModule.test(f) && !f.includes("__tests__"),
