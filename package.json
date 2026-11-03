@@ -25,6 +25,7 @@
     "test:integration": "vitest run --project integration --reporter=default --reporter=json --outputFile.json=integration-report.json"
   },
   "dependencies": {
+    "@node-rs/argon2": "~2.2.2",
     "drizzle-orm": "~0.45.4",
     "next": "^16.4.3",
     "next-intl": "^4.14.9",
