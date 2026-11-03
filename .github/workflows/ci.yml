@@ -9,10 +9,10 @@ on:
 permissions:
   contents: read
 
+# A pull request's newer run replaces its older one. Every push gets its own group, so none is cancelled or skipped
+# while queued: the existing-migrations check compares each push with the one before it.
 concurrency:
-  group: ci-${{ github.ref }}
-  # pushes are never cancelled: the existing-migrations check compares each push with the previous one, so a
-  # cancelled run would let the next push treat a modified migration as the base.
+  group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -44,7 +44,8 @@ jobs:
           if git rev-parse -q --verify "$base^{commit}" > /dev/null; then
             python3 scripts/check_migrations.py --base "$base"
           else
-            echo "no base commit (first push): nothing existed before"
+            echo "base $base is not in this history (a new branch or a force push): only the static checks ran"
+            python3 scripts/check_migrations.py
           fi
       # lint, dependency rules, migration checks, unit tests, test and suppression locks (scripts/quality-locks.json),
       # production build
@@ -115,6 +116,9 @@ jobs:
           if jq -r '.services.app.environment | keys[]' /tmp/compose.json | grep -E '^(MIGRATE_|POSTGRES_|DB_OWNER)'; then
             echo "app receives owner or superuser settings"; exit 1
           fi
+          app_user="$(jq -r '.services.app.environment.DATABASE_URL' /tmp/compose.json | sed -E 's#^postgres://([^@:]+)@.*#\1#')"
+          echo "app connects as: $app_user"
+          test "$app_user" = "$(jq -r '.services.migrate.environment.DB_APP_USER' /tmp/compose.json)"
       # Logs hold client addresses and paths: every service rotates them
       - name: Every service rotates its logs
         run: test "$(jq -c '[.services | to_entries[] | select(.value.logging.options["max-size"] == null) | .key]' /tmp/compose.json)" = '[]'
@@ -125,26 +129,32 @@ jobs:
       - name: Migrate exited cleanly and the app runs as a non-root user
         run: |
           test "$(docker compose ps -a migrate --format '{{.ExitCode}}')" = 0
-          test "$(docker compose exec -T app id -u)" != 0
+          uid="$(docker compose exec -T app id -u)"
+          echo "app uid: $uid"
+          test -n "$uid" && test "$uid" != 0
       - name: Caddy serves the health check and the pages
         run: |
-          curl -sS -D /tmp/health.headers -o /tmp/health.json http://localhost/api/health
+          # caddy has no healthcheck of its own, so --wait does not wait for it to listen
+          curl -sS --retry 10 --retry-delay 1 --retry-all-errors -D /tmp/health.headers -o /tmp/health.json \
+            http://localhost/api/health
           cat /tmp/health.headers /tmp/health.json
           head -n1 /tmp/health.headers | grep -q ' 200'
           grep -qi '^cache-control: no-store' /tmp/health.headers
           test "$(jq -r .status /tmp/health.json)" = ok
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/en)" = 200
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/zh-TW)" = 200
-      - name: Every script on the page carries this response's CSP nonce
+      - name: Every script on every locale's page carries this response's CSP nonce
         run: |
-          curl -sS -D /tmp/page.headers -o /tmp/page.html http://localhost/en
-          nonce="$(tr -d '\r' < /tmp/page.headers | sed -n "s/^content-security-policy:.*'nonce-\([^']*\)'.*/\1/Ip")"
-          test -n "$nonce"
-          total="$(grep -o '<script' /tmp/page.html | wc -l)"
-          with_nonce="$(grep -o "<script[^>]*nonce=\"$nonce\"" /tmp/page.html | wc -l)"
-          echo "scripts: $total, with this response's nonce: $with_nonce"
-          test "$total" -gt 0 && test "$total" = "$with_nonce"
-          if grep -qi '^x-powered-by:' /tmp/page.headers; then echo "X-Powered-By is sent"; exit 1; fi
+          for locale in en zh-TW; do
+            curl -sS -D /tmp/page.headers -o /tmp/page.html "http://localhost/$locale"
+            nonce="$(tr -d '\r' < /tmp/page.headers | sed -n "s/^content-security-policy:.*'nonce-\([^']*\)'.*/\1/Ip")"
+            test -n "$nonce"
+            total="$(grep -o '<script' /tmp/page.html | wc -l)"
+            with_nonce="$(grep -o "<script[^>]*nonce=\"$nonce\"" /tmp/page.html | wc -l)"
+            echo "$locale: scripts $total, with this response's nonce $with_nonce"
+            test "$total" -gt 0 && test "$total" = "$with_nonce"
+            if grep -qi '^x-powered-by:' /tmp/page.headers; then echo "X-Powered-By is sent"; exit 1; fi
+          done
       - name: The app role cannot change the schema
         run: |
           out="$(docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U template_nextjs_app -d template_nextjs -c 'CREATE TABLE intruder (id int)' 2>&1)" && exit 1
