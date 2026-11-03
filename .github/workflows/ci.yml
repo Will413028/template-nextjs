@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # pushes are never cancelled: the existing-migrations check compares each push with the previous one, so a
+  # cancelled run would let the next push treat a modified migration as the base.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  app:
+    name: App (lint + test + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # full history: the existing-migrations check needs the merge-base with the base
+          fetch-depth: 0
+          persist-credentials: false
+      # Node.js 26 and the pnpm version in package.json's packageManager, then pnpm install --frozen-lockfile with the
+      # store cached. pnpm/setup succeeds pnpm/action-setup for pnpm 11 and newer.
+      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        with:
+          runtime: node@26
+          cache: true
+          require-lockfile: true
+      - name: Check git hooks were installed
+        run: test -x "$(git rev-parse --git-path hooks)/commit-msg"
+      - run: pnpm audit --prod --audit-level high
+      - name: Existing migrations are unchanged
+        env:
+          EVENT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          base="$EVENT_BASE"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then base=HEAD~1; fi
+          if git rev-parse -q --verify "$base^{commit}" > /dev/null; then
+            python3 scripts/check_migrations.py --base "$base"
+          else
+            echo "no base commit (first push): nothing existed before"
+          fi
+      # lint, dependency rules, migration checks, unit tests, test and suppression locks (scripts/quality-locks.json),
+      # production build
+      - run: pnpm check
+      # PostgreSQL in Docker (testcontainers) with the production roles; only CI runs these, never a shared dev machine
+      - run: pnpm test:integration
+      - run: python3 scripts/check_locks.py --vitest-report test-report.json --integration-report integration-report.json
+
+  # Every commit that edits a checker's configuration or moves a lock the bad way names why in a Quality-Gate trailer
+  # (scripts/check_commit_policy.py; lefthook checks it at commit time too).
+  policy:
+    name: Commit policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Check the commits being added
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # a new branch has no base: check every commit it holds
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then range="$HEAD_SHA"
+          else range="$BASE..$HEAD_SHA"; fi
+          python3 scripts/check_commit_policy.py --range "$range"
+
+  # A derived project starts with `make rename`; it must rewrite every template name and still pass its checks.
+  rename:
+    name: Rename smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        with:
+          runtime: node@26
+          cache: true
+          require-lockfile: true
+      - run: make rename NAME=ci-probe
+      - name: No file outside the plans still names the template
+        run: |
+          if git grep -n -i -E 'template[-_]nextjs' -- ':!docs/plans/**'; then
+            echo "files above still name the template; update scripts/rename.py"; exit 1
+          fi
+      - run: pnpm lint
+
+  # Builds the production images, applies migrations with the migrate image, and checks the stack through caddy.
+  stack:
+    name: Compose stack (images + migrate + health)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: make lint-docker
+      # .env and the password files under .secrets/, as a developer gets them
+      - run: make init-env
+      - name: Each service gets only its own secrets
+        run: |
+          docker compose config --format json > /tmp/compose.json
+          test "$(jq -c '.services.app.secrets | map(.source)' /tmp/compose.json)" = '["db_app_password"]'
+          test "$(jq -c '.services.migrate.secrets | map(.source)' /tmp/compose.json)" = '["db_owner_password"]'
+          test "$(jq -c '.services.caddy.secrets // []' /tmp/compose.json)" = '[]'
+          if jq -r '.services.app.environment | keys[]' /tmp/compose.json | grep -E '^(MIGRATE_|POSTGRES_|DB_OWNER)'; then
+            echo "app receives owner or superuser settings"; exit 1
+          fi
+      # Logs hold client addresses and paths: every service rotates them
+      - name: Every service rotates its logs
+        run: test "$(jq -c '[.services | to_entries[] | select(.value.logging.options["max-size"] == null) | .key]' /tmp/compose.json)" = '[]'
+      # Published ports bypass ufw: only caddy may have any
+      - name: Only caddy publishes ports
+        run: test "$(jq -c '[.services | to_entries[] | select(.value.ports) | .key]' /tmp/compose.json)" = '["caddy"]'
+      - run: docker compose up -d --build --wait
+      - name: Migrate exited cleanly and the app runs as a non-root user
+        run: |
+          test "$(docker compose ps -a migrate --format '{{.ExitCode}}')" = 0
+          test "$(docker compose exec -T app id -u)" != 0
+      - name: Caddy serves the health check and the pages
+        run: |
+          curl -sS -D /tmp/health.headers -o /tmp/health.json http://localhost/api/health
+          cat /tmp/health.headers /tmp/health.json
+          head -n1 /tmp/health.headers | grep -q ' 200'
+          grep -qi '^cache-control: no-store' /tmp/health.headers
+          test "$(jq -r .status /tmp/health.json)" = ok
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/en)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/zh-TW)" = 200
+      - name: Every script on the page carries this response's CSP nonce
+        run: |
+          curl -sS -D /tmp/page.headers -o /tmp/page.html http://localhost/en
+          nonce="$(tr -d '\r' < /tmp/page.headers | sed -n "s/^content-security-policy:.*'nonce-\([^']*\)'.*/\1/Ip")"
+          test -n "$nonce"
+          total="$(grep -o '<script' /tmp/page.html | wc -l)"
+          with_nonce="$(grep -o "<script[^>]*nonce=\"$nonce\"" /tmp/page.html | wc -l)"
+          echo "scripts: $total, with this response's nonce: $with_nonce"
+          test "$total" -gt 0 && test "$total" = "$with_nonce"
+          if grep -qi '^x-powered-by:' /tmp/page.headers; then echo "X-Powered-By is sent"; exit 1; fi
+      - name: The app role cannot change the schema
+        run: |
+          out="$(docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U template_nextjs_app -d template_nextjs -c 'CREATE TABLE intruder (id int)' 2>&1)" && exit 1
+          echo "$out"
+          grep -q 'permission denied for schema public' <<< "$out"
+      - if: failure()
+        run: docker compose logs
+
+  gate:
+    # The only required check on main: it passes when every other job in this workflow succeeded or was skipped.
+    name: gate (ci)
+    if: always()
+    needs: [app, policy, rename, stack]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every job succeeded or was skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a needed job ended with: $r"; exit 1 ;; esac
+          done
