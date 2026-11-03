@@ -37,7 +37,7 @@
 ## 範圍
 
 - 做：需求清單裡 D4 決定的範圍。
-- 不做：admin 使用者管理畫面（Go 版也延後）；和其他兩個 template 共用程式碼。
+- 不做：admin 使用者管理畫面（Go 版也延後）；和其他兩個 template 共用程式碼；Vercel、Cloudflare 等託管平台（D5=A 自架；Will 2026-11-03 再確認範本不實際使用它們）。
 - 延後：帳號濫用與管理（requirements E4、F4、F5、F7，原步驟 4），觸發：第一個需要登入鎖定、trusted device、admin 或稽核紀錄的衍生專案（D4）。
 - 延後：Go 版專案頁 `wiki/projects/template-go-nextjs/index.md` Pending「延後」段的 12 項（email 驗證與找回密碼、MFA、OTel、背景工作、多實例、managed Postgres、`pg_hba`、OpenAPI 3.1、ogen spike、compose 固定 subnet、admin UI、`FieldError` 帶參數），觸發條件照該頁；其中只跟 Go 後端有關的（ogen spike、OpenAPI 3.1）收尾時標不適用。
 
@@ -48,7 +48,7 @@
   - 消費端：無（repo 未建）。
   - 驗收：每項一段結論加上可重跑的指令與原始輸出，存成 `2026-11-03-nextjs-template/spike.md`；結論標明實測或推論；`rg -o --no-filename '^func (Test\w+)' -r '$1'` 掃上列 Go 測試檔得到的每個名稱，在 `auth-parity.md` 都有一列；ADR 歸屬表涵蓋兩份 ADR 的每條 D。
   - 停止條件：(a) 帶跨站 Origin 的案例沒被擋下，且沒有替代 CSRF 做法時，回報 Will；沒有任何 argon2id 套件（依序試 `@node-rs/argon2`、`argon2`、`hash-wasm`）能在目標 image 載入並設成 ADR 參數時，回報 Will，不自行換演算法；session 檢查層的結論會改變不變量第 2 列的機制時，先改計畫再進步驟 1。
-- [ ] **1. walking skeleton**（被擋於：D1、D3、D5、步驟 0）
+- [x] **1. walking skeleton**（被擋於：D1、D3、D5、步驟 0）
   - 範圍：先跑 quality-baseline skill 決定第一版 CI；建第一個 commit（`.gitignore` 含 `AGENTS.local.md`；`.git` 已存在）、建 GitHub repo、dev branch；從 Go 版照搬工具鏈（lefthook、Biome、dependency-cruiser、knip、security.yml、tool-versions.yml、`check_commit_policy.py`、`check_locks.py`、`docs/rules/` 中與語言無關的部分）；Next.js 專案放在 repo 根目錄或 `app/`（實作時定，寫進 AGENTS.md）；U1 首頁、U6 i18n 與 CSP；`GET /api/health` Route Handler；DB 連線與一個空的 migration；compose（postgres、migrate、app、Caddy）；`pnpm check` 入口；改寫 `check_locks.py`（拿掉 Go 報告與 Go 抑制註解規則，只留 vitest 報告與 TypeScript、SQL），`quality-locks.json` 重設為新 repo 的實際數字；CI job 改成 app、policy、rename、stack、gate，gate 的 `needs` 列出其他四個；stack job 的 `intruder` 檢查換成 `template_nextjs_app` 與 `template_nextjs`。
   - 消費端：無（repo 未建）。完成後跑 `rg -n 'template[-_]go[-_]nextjs|backend/|frontend/|go test|golangci' .github lefthook.yml Makefile docker-compose*.yml scripts`，結果要為空或每筆附理由。
   - 驗收：`pnpm check` 本機綠；CI 的 app、policy、stack job 綠，stack job 打 `/api/health` 拿到 200；mutation：讓 health 回 500，stack job 要失敗；刪掉一個 integration 測試，`check_locks.py` 要失敗。
@@ -132,7 +132,7 @@
 | 步驟 | 狀態 | 已跑的驗收 | 未跑的驗收與原因 | commit |
 |---|---|---|---|---|
 | 0 spike | 完成 | 2026-11-03：`spike.md`、`auth-parity.md` 產出；orchestrator 重跑 a 的 vitest（20 過）、b 的 integration（各 2 過）、parity 完整性（87 名稱無缺） | a 的 4 個 Docker stack 測試與 c 未由 orchestrator 重跑（機器 load 高；子代理已實測，原始輸出在 `spike.md`）；amd64 未測 | 未 commit（repo 無首個 commit，併入步驟 1） |
-| 1 walking skeleton | 未開始 | | | |
+| 1 walking skeleton | 完成 | 2026-11-03：本機 `pnpm check` exit 0（unit 13）；CI run 41581092195 全綠（app 含 integration 8、policy、rename、stack：health 200、en／zh-TW 各 20 個 script 全帶 nonce、uid 1001、app 角色 DDL 被拒；Security 全綠）；mutation：PR #4 health 回 500 → stack job `app is unhealthy` 失敗、integration 測試 `expected 500 to be 200`；PR #5 刪一個 integration 測試 → `tests.integration: 7, locked at 8`；本機 mutation：depcruise 違規、server-only 標頭、noProcessEnv、zizmor unpinned-uses、hadolint、unit 測試數鎖；消費端 `rg` 無結果；獨立 code review 1 blocking＋5 should 已修 | `_global-error` 是靜態頁卻帶 nonce CSP（錯誤頁不 hydrate），記為步驟 2 處理；drizzle-kit 接著 0000 snapshot 產生下一支 migration 由步驟 2 第一個 schema 驗證 | dev `308cf6b` 之後（見 git log） |
 | 2 認證 | 未開始 | | | |
 | 3 items | 未開始 | | | |
 | 4 帳號濫用與管理 | 延後（D4） | | | |
