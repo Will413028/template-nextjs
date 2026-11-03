@@ -32,9 +32,11 @@ DERIVED = "template/derived/"
 BEGIN, END = b">>> template-only", b"<<< template-only"
 # Any of these in the output means a template-only part leaked into it.
 FORBIDDEN = re.compile(
-    rb"template[-_]nextjs|template/|new_project|docs/plans|make new\b|" + re.escape(BEGIN) + b"|" + re.escape(END),
+    rb"template[-_]nextjs|template/(?:derived|new_project|test_new_project)|new_project|docs/plans|make new\b|" + re.escape(BEGIN) + b"|" + re.escape(END),
     re.IGNORECASE,
 )
+# PostgreSQL truncates identifiers at 63 bytes; the longest role is <name>_owner
+MAX_NAME = 50
 NAME_PATTERN = re.compile(r"[a-z](?:[a-z0-9-]*[a-z0-9])?")
 REPO_PATTERN = re.compile(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+")
 
@@ -56,6 +58,8 @@ def run_git(cwd: pathlib.Path, *args: str, stdin: bytes | None = None) -> bytes:
 def check_arguments(name: str, repo: str) -> None:
     if not NAME_PATTERN.fullmatch(name):
         raise GenerateError(f"invalid name {name!r}: use lowercase letters, digits and hyphens, starting with a letter")
+    if len(name) > MAX_NAME:
+        raise GenerateError(f"name {name!r} is longer than {MAX_NAME} characters (it becomes PostgreSQL identifiers)")
     if name == OLD_NAME:
         raise GenerateError(f"choose a name other than {OLD_NAME!r}")
     if not REPO_PATTERN.fullmatch(repo):
@@ -72,7 +76,9 @@ def read_template(top: pathlib.Path) -> Template:
         mode, kind, obj = meta.decode().split()
         if kind != "blob" or mode not in ("100644", "100755"):
             raise GenerateError(f"{path.decode()}: unsupported entry {mode} {kind} (only regular files are copied)")
-        listed.append((path.decode(), mode, obj))
+        rel = path.decode()
+        if not rel.startswith(EXCLUDED) or rel.startswith(DERIVED):  # never read what is left out
+            listed.append((rel, mode, obj))
     blobs = run_git(top, "cat-file", "--batch", stdin="".join(f"{obj}\n" for _, _, obj in listed).encode())
     files: dict[str, tuple[str, bytes]] = {}
     offset = 0
@@ -104,7 +110,7 @@ def drop_template_only(path: str, text: bytes) -> bytes:
     return b"".join(kept)
 
 
-def build_output(top: pathlib.Path, template: Template, name: str, repo: str) -> dict[str, tuple[str, bytes]]:
+def build_output(template: Template, name: str, repo: str) -> dict[str, tuple[str, bytes]]:
     """Every output file computed and checked in memory; raises GenerateError instead of returning a bad tree."""
     _, files = template
     table = {OLD_REPO: repo, OLD_DB: name.replace("-", "_"), OLD_NAME: name}
@@ -126,6 +132,8 @@ def build_output(top: pathlib.Path, template: Template, name: str, repo: str) ->
         if text is not None:
             data = replace(text).encode("utf-8")
         out = replace(path)
+        if out in output:
+            problems.append(f"{out}: two template files map to this path")
         output[out] = (mode, data)
         if out.startswith(EXCLUDED):
             problems.append(f"{out}: an excluded path is in the output")
@@ -149,15 +157,21 @@ def generate(top: pathlib.Path, dest: pathlib.Path, name: str, repo: str) -> str
     if run_git(top, "status", "--porcelain", "--untracked-files=normal").strip():
         raise GenerateError(f"{top} has uncommitted or untracked files; commit or remove them first")
     template = read_template(top)
-    output = build_output(top, template, name, repo)
+    output = build_output(template, name, repo)
 
     work = pathlib.Path(tempfile.mkdtemp(prefix=f".{dest.name}.", dir=dest.parent))
+    umask = os.umask(0)
+    os.umask(umask)
+    work.chmod(0o777 & ~umask)  # mkdtemp makes it 0700; the project directory gets the usual permissions
+    replaced_empty_dest = False
     try:
         for path, (mode, data) in output.items():
             target = work / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
             target.chmod(0o755 if mode == "100755" else 0o644)
+        for directory in {p for path in output for p in (work / path).parents if p != work and work in p.parents}:
+            directory.chmod(0o777 & ~umask)
         run_git(work, "init", "-q", "-b", "main")
         run_git(work, "add", "-A")
         message = (
@@ -166,11 +180,17 @@ def generate(top: pathlib.Path, dest: pathlib.Path, name: str, repo: str) -> str
             f"Large-Change: initial commit generated from {OLD_NAME}@{template[0]}\n"
         )
         run_git(work, "commit", "-q", "-F", "-", stdin=message.encode())
+        # the project's branch model: daily work on dev, main only through a dev -> main pull request
+        run_git(work, "branch", "dev")
+        run_git(work, "switch", "-q", "dev")
         if dest.exists():
             dest.rmdir()  # empty, checked above
+            replaced_empty_dest = True
         os.rename(work, dest)
     except BaseException:
         shutil.rmtree(work, ignore_errors=True)
+        if replaced_empty_dest and not dest.exists():
+            dest.mkdir()  # give back the empty directory the user made
         raise
     return template[0]
 
@@ -187,7 +207,7 @@ def main() -> int:
     except GenerateError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    print(f"Created {args.dest} from {OLD_NAME}@{sha[:12]} (one commit on main, no remote).")
+    print(f"Created {args.dest} from {OLD_NAME}@{sha[:12]} (one commit on main and dev, dev checked out, no remote).")
     print(f"Next: cd {args.dest} && pnpm install && make init-env")
     return 0
 

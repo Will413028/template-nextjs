@@ -65,9 +65,11 @@ class GenerateTest(unittest.TestCase):
         self.root = pathlib.Path(self.tmp.name)
         self.env = mock.patch.dict(os.environ, GIT_ENV)
         self.env.start()
+        self.umask = os.umask(0o022)
 
     def tearDown(self):
         self.env.stop()
+        os.umask(self.umask)
         self.tmp.cleanup()
 
     def generate(self, files=None, name="my-app", repo=None, dest=None):
@@ -100,7 +102,9 @@ class GenerateTest(unittest.TestCase):
     def test_starts_a_new_repository_with_one_commit_and_no_remote(self):
         src, dest, _ = self.generate()
         self.assertEqual(git(dest, "rev-list", "--count", "HEAD").strip(), "1")
-        self.assertEqual(git(dest, "branch", "--show-current").strip(), "main")
+        self.assertEqual(git(dest, "branch", "--show-current").strip(), "dev")
+        self.assertEqual(git(dest, "rev-parse", "main"), git(dest, "rev-parse", "dev"))
+        self.assertEqual(oct(dest.stat().st_mode & 0o777), oct(0o777 & ~self.umask))
         self.assertEqual(git(dest, "remote").strip(), "")
         self.assertEqual(git(dest, "status", "--porcelain"), "")
         sha = git(src, "rev-parse", "HEAD").strip()
@@ -177,9 +181,25 @@ class GenerateTest(unittest.TestCase):
             new_project.generate(src, self.root / "out", "my-app", "acme/my-app")
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
 
+    def test_two_files_mapping_to_one_path_writes_nothing(self):
+        self.assert_refused_and_untouched(files={**BASE_FILES, "my-app.txt": "already named\n"})
+
+    def test_a_failed_move_gives_back_the_empty_destination(self):
+        dest = self.root / "out"
+        dest.mkdir()
+        src = make_template(self.root, BASE_FILES)
+        with mock.patch.object(new_project.os, "rename", side_effect=OSError("busy")), self.assertRaises(OSError):
+            new_project.generate(src, dest, "my-app", "acme/my-app")
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["out", "src"])
+        self.assertEqual(list(dest.iterdir()), [])
+
+    def test_other_paths_under_a_template_directory_are_allowed(self):
+        _, dest, _ = self.generate(files={**BASE_FILES, "src/mail/template/x.ts": "// a mail template/ dir\n"})
+        self.assertTrue((dest / "src/mail/template/x.ts").exists())
+
     def test_refuses_bad_names_and_repositories(self):
         for name, repo in (("My-App", "acme/x"), ("my_app", "acme/x"), ("1app", "acme/x"), (NAME, "acme/x"),
-                           ("my-app", "acme"), ("my-app", "acme/x/y"), ("my-app", "acme/x y")):
+                           ("a" * 51, "acme/x"), ("my-app", "acme"), ("my-app", "acme/x/y"), ("my-app", "acme/x y")):
             with self.subTest(name=name, repo=repo):
                 with self.assertRaises(new_project.GenerateError):
                     new_project.check_arguments(name, repo)
@@ -191,7 +211,7 @@ class TemplateRepositoryTest(unittest.TestCase):
     def test_the_real_template_generates_cleanly(self):
         # computes (never writes) the output of this checkout's HEAD: every check except the clean-tree one
         top = SCRIPT.parent.parent
-        files = new_project.build_output(top, new_project.read_template(top), "my-app", "acme/my-app")
+        files = new_project.build_output(new_project.read_template(top), "my-app", "acme/my-app")
         self.assertIn("package.json", files)
         self.assertNotIn("template/new_project.py", files)
 

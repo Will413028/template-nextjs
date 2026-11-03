@@ -102,14 +102,15 @@ jobs:
         working-directory: ${{ runner.temp }}/ci-probe
         run: |
           test "$(git rev-list --count HEAD)" = 1
+          test "$(git branch --show-current)" = dev
+          test "$(git rev-parse main)" = "$(git rev-parse dev)"
           test -z "$(git remote)"
           test -z "$(git status --porcelain)"
           python3 scripts/check_commit_policy.py --range HEAD
-      # ci[-]probe: the pattern must not match this line itself
       - name: Nothing names the template; the repository links point to the given repository
         working-directory: ${{ runner.temp }}/ci-probe
         run: |
-          if git grep -n -i -E 'template[-_]nextjs|Will413028/ci[-]probe' ; then
+          if git grep -n -i -E 'template[-_]nextjs|Will413028/ci-probe' ; then
             echo "files above name the template or the default repository"; exit 1
           fi
           grep -F 'github.com/ci-owner/ci-probe-fork/security/advisories/new' SECURITY.md ||

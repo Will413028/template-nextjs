@@ -13,7 +13,8 @@ make up                         # http://localhost
 ```
 
 Push it to its repository (`git remote add origin git@github.com:Will413028/template-nextjs.git`, then
-`git push -u origin main`); `SECURITY.md` links to that repository's advisory form.
+`git push -u origin main dev`; make `dev` the default branch); `SECURITY.md` links to that repository's advisory
+form. Daily work goes to `dev` (see `AGENTS.md`).
 
 `make dev` runs `next dev` inside the stack on http://localhost:3000. `pnpm check` runs CI's checks except the ones that
 start containers (Node.js 26, pnpm from `packageManager`); CI also runs `pnpm test:integration` and the compose stack.
