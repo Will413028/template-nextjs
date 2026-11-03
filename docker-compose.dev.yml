@@ -1,0 +1,21 @@
+services:
+  # `make dev`: next dev in a container with src/ and messages/ mounted, so edits reload
+  app:
+    build:
+      context: .
+      target: dev
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./src:/app/src
+      - ./messages:/app/messages
+      - ./public:/app/public
+    # next dev answers /api/health too, but compiles routes on first request
+    healthcheck:
+      start_period: 60s
+
+  # The browser goes through caddy in dev too: http://localhost:3000. Loopback only, and not port 80: Docker Desktop
+  # on macOS needs its privileged helper to bind a port below 1024 on a specific address.
+  caddy:
+    ports: !override
+      - "127.0.0.1:3000:80"

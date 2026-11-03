@@ -1,0 +1,112 @@
+# Each service gets only its own variables (values come from .env) and its own secrets (files under .secrets/,
+# created by `make init-env`), mounted at /run/secrets/<name> and read through <KEY>_FILE.
+# Database roles (deploy/postgres/initdb/10-roles.sh): the superuser only initializes the volume; migrate connects
+# as the owner role; the app connects as the app role, which has DML only.
+# Only caddy publishes ports (deploy/Caddyfile). Ports Docker publishes bypass ufw, so nothing else is published.
+
+x-db-names: &db-names
+  POSTGRES_DB: ${POSTGRES_DB:-template_nextjs}
+  DB_OWNER_USER: ${DB_OWNER_USER:-template_nextjs_owner}
+  DB_APP_USER: ${DB_APP_USER:-template_nextjs_app}
+
+# Every container's log is rotated: at most 5 files of 10 MB each, then the oldest is dropped. Without this Docker's
+# default json-file driver keeps logs until the container is removed.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  postgres:
+    logging: *logging
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    restart: unless-stopped
+    environment:
+      <<: *db-names
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password, db_owner_password, db_app_password]
+    volumes:
+      # 18+ keeps data in a versioned subdirectory; mount the parent (docker-library/postgres#37)
+      - postgres-data:/var/lib/postgresql
+      # runs only when the volume is empty; on an existing volume the roles must already exist
+      - ./deploy/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # applies migrations/ as the owner role and grants the app role (scripts/migrate.mts); app starts after it exits.
+  migrate:
+    logging: *logging
+    build:
+      context: .
+      target: migrate
+    environment:
+      MIGRATE_DATABASE_URL: postgres://${DB_OWNER_USER:-template_nextjs_owner}@postgres:5432/${POSTGRES_DB:-template_nextjs}
+      MIGRATE_DATABASE_PASSWORD_FILE: /run/secrets/db_owner_password
+      DB_APP_USER: ${DB_APP_USER:-template_nextjs_app}
+    secrets: [db_owner_password]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    logging: *logging
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    # Next.js finishes in-flight requests on SIGTERM with no time limit of its own; compose sends SIGKILL after this.
+    # Long enough for a request plus the ~5 s keep-alive Caddy holds open.
+    stop_grace_period: 35s
+    environment:
+      DATABASE_URL: postgres://${DB_APP_USER:-template_nextjs_app}@postgres:5432/${POSTGRES_DB:-template_nextjs}
+      DATABASE_PASSWORD_FILE: /run/secrets/db_app_password
+      DB_MAX_CONNS: ${DB_MAX_CONNS:-}
+      DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-}
+    secrets: [db_app_password]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  caddy:
+    logging: *logging
+    image: caddy:2.11.7@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af
+    restart: unless-stopped
+    environment:
+      # a domain name for automatic HTTPS, or :80 for plain http on a local machine
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+secrets:
+  postgres_password:
+    file: .secrets/postgres_password
+  db_owner_password:
+    file: .secrets/db_owner_password
+  db_app_password:
+    file: .secrets/db_app_password
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

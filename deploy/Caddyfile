@@ -1,0 +1,15 @@
+# The single entry point (docker-compose.yml): every request goes to the Next.js app, so the browser sees one origin
+# and the session cookie needs no Domain and no CORS.
+# SITE_ADDRESS is a domain name for automatic HTTPS, or :80 for plain http on a local machine.
+{$SITE_ADDRESS::80} {
+	log
+
+	# Ignored by browsers on plain http; applies once SITE_ADDRESS is a domain served over HTTPS.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	reverse_proxy app:3000 {
+		# Holds requests while the app restarts (compose rebuild) instead of failing them; a single upstream needs
+		# no health_uri.
+		lb_try_duration 10s
+	}
+}
