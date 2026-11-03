@@ -97,11 +97,14 @@ jobs:
           if git grep --untracked -n -i -E 'template[-_]nextjs' -- ':!docs/plans/**'; then
             echo "files above still name the template; update scripts/rename.py"; exit 1
           fi
-      - name: The repository links point to the given repository
+      # ci[-]probe: the pattern must not match this line itself
+      - name: The repository links point to the given repository, none to the default
         run: |
-          for file in SECURITY.md README.md; do
-            grep -F 'github.com/ci-owner/ci-probe-repo' "$file" || { echo "$file does not link to ci-owner/ci-probe-repo"; exit 1; }
-          done
+          grep -F 'github.com/ci-owner/ci-probe-repo/security/advisories/new' SECURITY.md ||
+            { echo "SECURITY.md does not link to ci-owner/ci-probe-repo"; exit 1; }
+          if git grep --untracked -n -E 'Will413028/ci[-]probe' -- ':!docs/plans/**'; then
+            echo "files above link to the default repository, not to REPO"; exit 1
+          fi
       # lint, dependency rules, migration checks, unit tests, locks and the production build of the renamed project
       - run: pnpm check
 
