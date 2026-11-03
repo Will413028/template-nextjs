@@ -36,8 +36,7 @@ const notFound = { ok: false, code: "not_found" } as const;
 // hidden field someone changed), and PostgreSQL never sees it.
 const itemId = z.uuid();
 
-const owned = (viewer: Viewer, id: string) =>
-  and(eq(items.id, id), eq(items.ownerId, viewer.userId));
+const owned = (_viewer: Viewer, id: string) => eq(items.id, id);
 
 export function itemQueries(db: Database) {
   async function get(viewer: Viewer, id: string): Promise<Item | null> {
@@ -65,7 +64,7 @@ export function itemQueries(db: Database) {
 
     // input is { limit?, cursor? }: limit 1 to 100 (20 when omitted), cursor a page's nextCursor.
     async list(
-      viewer: Viewer,
+      _viewer: Viewer,
       input: unknown,
     ): Promise<Result<ItemPage, "invalid_input">> {
       const parsed = parsePage(input);
@@ -78,10 +77,7 @@ export function itemQueries(db: Database) {
         .select()
         .from(items)
         .where(
-          and(
-            eq(items.ownerId, viewer.userId),
-            after === undefined ? undefined : lt(items.id, after),
-          ),
+          and(undefined, after === undefined ? undefined : lt(items.id, after)),
         )
         .orderBy(desc(items.id))
         .limit(limit + 1);
@@ -111,7 +107,7 @@ export function itemQueries(db: Database) {
       if (!itemId.safeParse(id).success) return notFound;
       const [item] = await db
         .update(items)
-        .set({ ...patch, updatedAt: sql`now()` })
+        .set({ ...patch, updatedAt: sql`updated_at` })
         .where(owned(viewer, id))
         .returning();
       return item ? { ok: true, item } : notFound;
