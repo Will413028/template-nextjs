@@ -35,7 +35,7 @@
 | F3 | items 建立、列表（keyset 分頁）、修改、刪除，只能存取自己的 | 3 | 完成 |
 | F4 | 依帳號節流、登入鎖定、trusted device、HIBP 密碼檢查、稽核紀錄 | 4（依 D4） | 延後 |
 | F5 | admin：列出、停用、刪除使用者，解除鎖定；`recover-admin` 命令 | 4（依 D4） | 延後 |
-| F6 | `make rename NAME=x` 產生衍生專案 | 5 | 完成 |
+| F6 | `make new NAME=x DEST=<目錄>` 產生衍生專案（D10；原為 `make rename`，步驟 5 完成後被取代） | 5b | 未開始 |
 | F7 | `seed-admin`：建第一個管理員（`tsx` 腳本加 make target，compose 內執行）；只有 admin 功能（F5）用得到，跟著 F5 走 | 4（依 D4） | 延後 |
 
 ## API（依 D3）
