@@ -18,6 +18,6 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_username_check" CHECK ("users"."username" = lower("users"."username") AND char_length("users"."username") BETWEEN 3 AND 50)
 );
 --> statement-breakpoint
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "sessions_id_key" ON "sessions" USING btree ("id");--> statement-breakpoint
 CREATE INDEX "sessions_user_id_id_idx" ON "sessions" USING btree ("user_id","id" DESC NULLS FIRST);

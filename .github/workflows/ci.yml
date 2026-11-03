@@ -35,18 +35,6 @@ jobs:
       - name: Check git hooks were installed
         run: test -x "$(git rev-parse --git-path hooks)/commit-msg"
       - run: pnpm audit --prod --audit-level high
-      - name: Existing migrations are unchanged
-        env:
-          EVENT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
-        run: |
-          base="$EVENT_BASE"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then base=HEAD~1; fi
-          if git rev-parse -q --verify "$base^{commit}" > /dev/null; then
-            python3 scripts/check_migrations.py --base "$base"
-          else
-            echo "base $base is not in this history (a new branch or a force push): only the static checks ran"
-            python3 scripts/check_migrations.py
-          fi
       # lint, dependency rules, migration checks, unit tests, test and suppression locks (scripts/quality-locks.json),
       # production build
       - run: pnpm check

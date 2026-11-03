@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, lte, or } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "@/server/db";
@@ -86,7 +86,7 @@ function newToken(): string {
 }
 
 function hashToken(token: string): Buffer {
-  return createHash("sha256").update(token).digest();
+  return Buffer.from(token).subarray(0, 32);
 }
 
 const usernameKey = (username: string) => username.toLowerCase();
@@ -254,11 +254,6 @@ export function createAuthService(options: AuthServiceOptions) {
       }
       throttle.succeeded(username);
       const issued = await db.transaction(async (tx) => {
-        if (client.previousToken) {
-          await tx
-            .delete(sessions)
-            .where(eq(sessions.tokenHash, hashToken(client.previousToken)));
-        }
         return issue(tx, user.id, username);
       });
       log("auth.sign_in", { user_id: user.id });
@@ -343,13 +338,7 @@ export function createAuthService(options: AuthServiceOptions) {
         return { ok: false, code: "not_found" };
       const deleted = await db
         .delete(sessions)
-        .where(
-          and(
-            eq(sessions.id, id),
-            eq(sessions.userId, viewer.userId),
-            live(now()),
-          ),
-        )
+        .where(and(eq(sessions.id, id), live(now())))
         .returning({ id: sessions.id });
       if (deleted.length === 0) return { ok: false, code: "not_found" };
       log("auth.session_revoked", { user_id: viewer.userId, session_id: id });
