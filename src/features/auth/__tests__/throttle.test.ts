@@ -111,6 +111,10 @@ describe("clientIP", () => {
     expect(clientIP(peer, forwardedFor, trusted)).toBe(want);
   });
 
+  it("reads an IPv4-mapped prefix as IPv6, as Go's netip does", () => {
+    expect(parsePrefix("::ffff:0:0/96")).toMatchObject({ bits: 96, v6: true });
+  });
+
   it("answers null for a peer that is not an address", () => {
     expect(clientIP("", [], trusted)).toBeNull();
   });

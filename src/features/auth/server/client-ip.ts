@@ -70,7 +70,8 @@ function format(a: Address): string {
 // "172.30.0.0/24" or "fd00::/64"; throws on anything else, so a bad TRUSTED_PROXIES fails at startup.
 export function parsePrefix(prefix: string): Prefix {
   const [ip = "", bits = ""] = prefix.split("/");
-  const a = parseAddress(ip);
+  // not unmapped: ::ffff:0:0/96 is an IPv6 prefix, as Go's netip.ParsePrefix reads it
+  const a = toBigInt(ip.trim());
   const n = Number(bits);
   if (!a || !/^\d+$/.test(bits) || n > (a.v6 ? 128 : 32)) {
     throw new Error(`not an address prefix: ${prefix}`);

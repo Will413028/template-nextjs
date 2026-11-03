@@ -18,7 +18,7 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 });
 
 // Usernames are stored lowercased, so uniqueness and sign-in ignore case; the zod schema allows
-// [A-Za-z0-9_.-]{3,50} (server/credentials.ts).
+// [A-Za-z0-9_.-]{3,50} (credentials.ts).
 export const users = pgTable(
   "users",
   {

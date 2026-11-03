@@ -33,15 +33,12 @@ describe("argon2id hasher", () => {
     expect(await createHasher({ params: cheap }).verify("pw", bad)).toBe(false);
   });
 
-  it("runs at most maxConcurrent hashes at once and lets a waiting one give up", async () => {
+  it("runs at most maxConcurrent hashes at once", async () => {
     let running = 0;
     let peak = 0;
-    let release: () => void = () => {};
-    let gate = Promise.resolve();
     const slow = async () => {
       running++;
       peak = Math.max(peak, running);
-      await gate;
       await new Promise((r) => setTimeout(r, 20));
       running--;
       return "hash";
@@ -56,17 +53,6 @@ describe("argon2id hasher", () => {
       ),
     );
     expect(peak).toBe(2);
-
-    gate = new Promise<void>((r) => {
-      release = r;
-    });
-    const busy = [hasher.hash("a"), hasher.hash("b")];
-    const controller = new AbortController();
-    const waiting = hasher.hash("c", controller.signal);
-    controller.abort(new Error("request ended"));
-    await expect(waiting).rejects.toThrow("request ended");
-    release();
-    await Promise.all(busy);
     expect(running).toBe(0);
   });
 });

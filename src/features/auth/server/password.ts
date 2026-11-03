@@ -33,13 +33,9 @@ export const DEFAULT_ARGON2: Argon2Params = {
 const ARGON2ID = 2 as Algorithm;
 
 export type PasswordHasher = {
-  hash(password: string, signal?: AbortSignal): Promise<string>;
+  hash(password: string): Promise<string>;
   // A hash that does not parse is a mismatch, not an error.
-  verify(
-    password: string,
-    encoded: string,
-    signal?: AbortSignal,
-  ): Promise<boolean>;
+  verify(password: string, encoded: string): Promise<boolean>;
 };
 
 type Argon2 = {
@@ -59,8 +55,16 @@ const nodeArgon2: Argon2 = {
   verify: (encoded, password) => argon2Verify(encoded, password),
 };
 
-// Each hash holds memoryKiB while it runs, so at most maxConcurrent run at once; the rest wait in order, and give up
-// when their signal aborts.
+// @node-rs/argon2 hashes on libuv's thread pool, which Node.js sizes at 4 unless UV_THREADPOOL_SIZE says otherwise;
+// the same pool serves dns.lookup (new database connections) and fs. One worker stays free for them, so a burst of
+// sign-ins cannot stall every other request.
+const LIBUV_POOL = 4;
+const DEFAULT_MAX_CONCURRENT = Math.max(
+  1,
+  Math.min(availableParallelism(), LIBUV_POOL - 1),
+);
+
+// Each hash holds memoryKiB while it runs, so at most maxConcurrent run at once; the rest wait in order.
 export function createHasher(
   options: {
     params?: Argon2Params;
@@ -70,11 +74,10 @@ export function createHasher(
 ): PasswordHasher {
   const params = options.params ?? DEFAULT_ARGON2;
   const argon2 = options.argon2 ?? nodeArgon2;
-  const slots = semaphore(options.maxConcurrent ?? availableParallelism());
+  const slots = semaphore(options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT);
   return {
-    hash: (password, signal) =>
-      slots.run(() => argon2.hash(password, params), signal),
-    verify: (password, encoded, signal) =>
+    hash: (password) => slots.run(() => argon2.hash(password, params)),
+    verify: (password, encoded) =>
       slots.run(async () => {
         try {
           return await argon2.verify(encoded, password);
@@ -82,7 +85,7 @@ export function createHasher(
           // @node-rs/argon2 throws on a hash it cannot decode; Go's Verify reports a mismatch
           return false;
         }
-      }, signal),
+      }),
   };
 }
 
@@ -90,24 +93,12 @@ function semaphore(size: number) {
   let running = 0;
   const waiting: (() => void)[] = [];
   return {
-    async run<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-      signal?.throwIfAborted();
+    async run<T>(task: () => Promise<T>): Promise<T> {
       if (running < size) {
         running++;
       } else {
         // a finishing task hands its slot straight to the first waiter, so no newcomer takes it in between
-        await new Promise<void>((resolve, reject) => {
-          const start = () => {
-            signal?.removeEventListener("abort", abort);
-            resolve();
-          };
-          const abort = () => {
-            waiting.splice(waiting.indexOf(start), 1);
-            reject(signal?.reason);
-          };
-          waiting.push(start);
-          signal?.addEventListener("abort", abort, { once: true });
-        });
+        await new Promise<void>((resolve) => waiting.push(resolve));
       }
       try {
         return await task();
