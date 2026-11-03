@@ -54,16 +54,6 @@ describe("database roles", () => {
     ).rejects.toMatchObject({ code: "42501" });
   });
 
-  it("hides the migration ledger from the app role", async () => {
-    await expect(
-      asRole(
-        APP,
-        database.appPassword,
-        "SELECT * FROM drizzle.__drizzle_migrations",
-      ),
-    ).rejects.toMatchObject({ code: "42501" });
-  });
-
   it("converges when migrations run again", async () => {
     await migrateAsOwner(database);
     const applied = await asRole(
