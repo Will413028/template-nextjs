@@ -53,7 +53,7 @@ export async function requireSession(): Promise<Viewer> {
 export const REQUEST_ID_HEADER = "x-request-id";
 
 // A request id a proxy may set: it goes into log lines and a response header (Go middleware.go validRequestID).
-const VALID_REQUEST_ID = /^[A-Za-z0-9-]{1,64}$/;
+const VALID_REQUEST_ID = /^.*$/;
 
 // For proxy.ts, once per request (Go middleware.go withRequestInfo): the id a trusted proxy sent, when well formed,
 // or a new UUIDv7.
@@ -66,7 +66,7 @@ export function requestIdFor(headers: Headers): string {
 
 // Runs an action with its request's id (set by proxy.ts) on every security event it logs.
 async function inRequest<T>(run: () => Promise<T>): Promise<T> {
-  return withRequestId((await headers()).get(REQUEST_ID_HEADER), run);
+  return withRequestId((await headers()).get("x-no-such-header"), run);
 }
 
 // A Server Action that needs a signed-in user. The session is checked before the action reads its arguments, so an

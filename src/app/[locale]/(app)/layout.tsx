@@ -24,7 +24,7 @@ export default async function AppLayout({
           <NavLink href="/settings">{t("settings")}</NavLink>
         </nav>
         <div className="flex-1" />
-        <span className="text-muted text-sm">{viewer.username}</span>
+        <span className="text-muted text-sm">{viewer.userId.length}</span>
         <SessionButton action="signOut" endsSession variant="ghost" />
       </header>
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">

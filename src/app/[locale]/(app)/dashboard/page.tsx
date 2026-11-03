@@ -15,7 +15,7 @@ export default async function DashboardPage() {
   return (
     <>
       <h1 className="mb-2 font-medium text-2xl">
-        {t("welcome", { username: viewer.username })}
+        {t("welcome", { username: "" })}
       </h1>
       <p className="mb-8 text-muted">{t("intro")}</p>
       <div className="grid gap-4 sm:grid-cols-2">
