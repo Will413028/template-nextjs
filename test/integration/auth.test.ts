@@ -290,6 +290,20 @@ describe("sign-in throttling", () => {
       code: "login_throttled",
       retryAfterSeconds: 60,
     });
+    // an unknown username is throttled the same way, so the answer does not tell whether it exists
+    const unknown = name("nobody");
+    for (let i = 0; i < 5; i++) {
+      await auth.signIn(
+        { username: unknown, password: "x" },
+        { source: SOURCE },
+      );
+    }
+    expect(
+      await auth.signIn(
+        { username: unknown, password: "x" },
+        { source: SOURCE },
+      ),
+    ).toEqual({ ok: false, code: "login_throttled", retryAfterSeconds: 60 });
     // another client is not locked out by these failures
     expect((await attempt("198.51.100.7", PASSWORD)).ok).toBe(true);
     // a successful sign-in clears the username's counts
@@ -339,13 +353,33 @@ describe("sessions", () => {
     advance(DAY);
     expect(await auth.authenticate(idle.token)).toBeNull();
 
+    // used every 12 hours, so never idle for long: only the 7-day limit ends it
     const used = await signUp();
-    for (let day = 0; day < 6; day++) {
-      advance(DAY - MINUTE);
+    for (let i = 0; i < 13; i++) {
+      advance(DAY / 2);
       expect(await auth.authenticate(used.token)).not.toBeNull();
     }
-    advance(DAY);
+    advance(DAY / 2);
     expect(await auth.authenticate(used.token)).toBeNull();
+  });
+
+  it("neither lists nor revokes a session past its 7-day limit", async () => {
+    const { auth, signUp, signIn, advance } = setup();
+    const username = name("absolute");
+    const old = await signUp(username);
+    for (let i = 0; i < 13; i++) {
+      advance(DAY / 2);
+      await auth.authenticate(old.token);
+    }
+    const current = await signIn(username);
+    advance(DAY / 2);
+    // old is 7 days old and was used 12 hours ago; only its absolute limit has passed
+    expect((await auth.listSessions(current.viewer)).map((s) => s.id)).toEqual([
+      current.viewer.sessionId,
+    ]);
+    expect(
+      await auth.revokeSession(current.viewer, old.viewer.sessionId),
+    ).toEqual({ ok: false, code: "not_found" });
   });
 
   it("keeps a session used every 20 seconds alive under a 30-second idle limit", async () => {
