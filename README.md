@@ -8,10 +8,13 @@ next-intl (en, zh-TW), a per-request CSP nonce, and a Docker Compose stack behin
 ```bash
 git clone https://github.com/Will413028/template-nextjs.git my-project
 cd my-project
-make rename NAME=my-project     # package, database and role names, branding
+make rename NAME=my-project     # package, database and role names, branding, repository link
 make init-env                   # .env and the database password files in .secrets/
 make up                         # http://localhost
 ```
+
+The repository link (the clone URL above, the advisory form in `SECURITY.md`) becomes `Will413028/<NAME>`;
+`make rename NAME=my-project REPO=owner/name` points it at another repository.
 
 `make dev` runs `next dev` inside the stack on http://localhost:3000. `pnpm check` runs CI's checks except the ones that
 start containers (Node.js 26, pnpm from `packageManager`); CI also runs `pnpm test:integration` and the compose stack.
