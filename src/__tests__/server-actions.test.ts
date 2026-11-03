@@ -29,7 +29,9 @@ const actionModules = sources.filter((s) => useServer.test(s.text));
 // export const <name> = <wrapper>(
 const exported = (text: string) =>
   [
-    ...text.matchAll(/^export\s+(?:const|async function|function)\s+(\w+)/gm),
+    ...text.matchAll(
+      /^export\s+(?:const|let|var|async function|function)\s+(\w+)/gm,
+    ),
   ].map((m) => m[1]);
 const wrapperOf = (text: string, name: string) =>
   new RegExp(`^export const ${name} = (\\w+)\\(`, "m").exec(text)?.[1];
@@ -56,6 +58,7 @@ describe("server actions", () => {
       // every export is a wrapped const; `export async function` would skip the wrappers
       expect(text).not.toMatch(/^export\s+(async\s+)?function/m);
       expect(text).not.toMatch(/^export\s*\{/m);
+      expect(text).not.toMatch(/^export\s+(let|var)\s/m);
       expect(text).not.toMatch(/^export\s+default/m);
       for (const name of names) {
         const wrapper = wrapperOf(text, name ?? "");
