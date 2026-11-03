@@ -53,8 +53,19 @@
   - 消費端：無（repo 未建）。完成後跑 `rg -n 'template[-_]go[-_]nextjs|backend/|frontend/|go test|golangci' .github lefthook.yml Makefile docker-compose*.yml scripts`，結果要為空或每筆附理由。
   - 驗收：`pnpm check` 本機綠；CI 的 app、policy、stack job 綠，stack job 打 `/api/health` 拿到 200；mutation：讓 health 回 500，stack job 要失敗；刪掉一個 integration 測試，`check_locks.py` 要失敗。
 - [ ] **2. 認證垂直切片**（被擋於：D2 偏離清單經 Will 確認、D4、D7、步驟 1）
-  - 範圍：需求清單 U2、U3、E1、E2、F1、F2；登入節流依 D7。
+  - 範圍：需求清單 U2、U3、E1、E2、F1、F2；登入節流依 D7。2026-11-03 拆成 2a、2b、2c（一個 session 做不完；Will 同意），依序做，各自 commit 並以 CI 驗收；下面的「驗收」是三個子步驟合起來的驗收，2c 完成時逐項核對。
   - 不能動：步驟 1 的 CSP；session cookie 屬性由本步建立，之後照不變量第 3 列。
+  - [ ] **2a. 資料層與服務層**（被擋於：步驟 1；新依賴 `@node-rs/argon2` ~2.2.2 Will 2026-11-03 核准）
+    - 範圍：E1、E2 的 `src/features/auth/schema.ts` 與 migration；`src/features/auth/server/`：密碼（NFKC、長度、常見密碼清單、argon2id 與同時雜湊數上限、未知帳號跑 dummy hash）、session token（32 bytes base64url、只存 SHA-256、absolute／idle 期限、touch 頻率）、服務函式（註冊、登入、讀 session、登出、全部登出、列出／撤銷自己的 session、刪帳號要 10 分鐘內登入、cleanup）、記憶體節流（`IPLimiter`、`SignInThrottle`）、client IP 演算法（`clientIP`、`limitKey`，純函式）、安全事件日誌；branded `Viewer` 型別在這一步定義，2b 由 `server.ts` 匯出。不含 cookie、action、proxy、preload 與畫面。
+    - 消費端：無（新模組）；2b 的 `server.ts`、`actions.ts`。`rg -n 'features/auth' src test`。
+    - 驗收：auth-parity 標步驟 2 且屬服務層或 DB 的列填上 TS 測試名（`rg` 找得到）；unit 測試本機綠、integration 測試 CI 綠；`pnpm check` 本機綠；mutation：argon2 參數調低、DB 存明文 token、登入沿用舊 token、刪帳號不刪 session、拿掉同時雜湊數上限、撤銷 session 不檢查擁有者，各讓一個測試失敗（本機能跑的跑 unit；integration 的 mutation 用 CI 的 draft PR）。
+  - [ ] **2b. Server Action 邊界**（被擋於：2a）
+    - 範圍：`server.ts`（`requireSession`、`authedAction`、`publicAction`、`Viewer`）、`actions.ts`（註冊、登入、登出、全部登出、撤銷 session、刪帳號）與 `__Host-session` cookie；登入與註冊的 per-IP 限流和節流接上 action；`proxy.ts` 的 Fetch Metadata CSRF（D2 偏離清單第 1 條）與 matcher 涵蓋所有路徑；清失效 cookie 的 GET Route Handler（D3 修訂）；peer preload（D2 偏離清單第 3 條）與 Dockerfile 的 `NODE_OPTIONS`；`next start` harness 與 action client（spike 0(a) §7）；「`"use server"` 檔只叫 `actions.ts`、每個 export 是 `authedAction(`／`publicAction(`」單元測試；「manifest 每個 action 不帶 cookie 被拒」integration 測試。
+    - 範圍補充（2a code review 留下的）：`SignInThrottle` 為每組「帳號＋來源」各存一筆、保留 24 小時，未知帳號也算；接上 per-IP 限流後，量出一個來源每分鐘最多能新增幾筆，決定要不要設總筆數上限（上限滿時不能淘汰別人的計數，否則攻擊者能借此重置退避）。接受、不修：DB 出錯的登入嘗試仍算一次失敗（和 Go 的 `ReserveLoginAttempt` 相同）。
+    - 驗收：auth-parity 屬 cookie、action、CSRF、client IP、限流的列填上 TS 測試名；mutation：cookie 移除 `httpOnly`、`serverActions.allowedOrigins` 加 `evil.test`。
+  - [ ] **2c. 畫面與收尾**（被擋於：2b）
+    - 範圍：U2 註冊與登入頁、U3 dashboard overview 與 settings（登入中裝置列表與撤銷、全部登出、刪帳號）、`messages/*.json` 的錯誤碼翻譯；步驟 1 留下的 `_global-error` nonce 問題；端到端流程與 stack job 經 Caddy；requirements 的 U2、U3、E1、E2、F1、F2 改「完成」。
+    - 驗收：本步下列「驗收」的端到端流程與剩餘 mutation；auth-parity 標步驟 2 的列全部核對。
   - 驗收：`auth-parity.md` 標步驟 2 的列，「沿用」的 TS 測試名欄都有值且 `rg -n '<TS 測試名>' src` 找得到，「偏離」的在 D2 偏離清單裡且已確認；用步驟 0 (a) 的 harness 跑「註冊 → 登入 → GET `/dashboard` 頁面含自己的 username → 登出 → 再 GET 被導回登入頁」，CI stack job 用同一個 client 經 Caddy 跑一次；mutation（每項都要讓測試失敗）：cookie 選項移除 `httpOnly`；`serverActions.allowedOrigins` 加入攻擊來源 `evil.test`；argon2 參數調低；DB 改存明文 token；登入沿用舊 token；刪帳號不刪 session；拿掉同時雜湊數上限；撤銷 session 不檢查擁有者。
 - [ ] **3. items 垂直切片**（被擋於：D4、步驟 2）
   - 範圍：需求清單 U4、E3、F3。

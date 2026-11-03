@@ -35,61 +35,61 @@
 |---|---|---|---|---|
 | TestMain | httpapi/auth_test.go | 不適用：Go `dbtest.Main` 的測試基礎設施；TS 用 vitest globalSetup 加 testcontainers | 2 | |
 | TestOperationsRejectsUnknownName | httpapi/auth_test.go | 不適用：檢查 oapi-codegen 產生的 operation 名稱，沒有 openapi 就沒有這個風險 | 2 | |
-| TestCreateUserSetsSessionCookie | httpapi/auth_test.go | 沿用（cookie 屬性、43 字元 token、小寫 account；`Location` 與 RFC 3339 斷言不適用，因為沒有 REST） | 2 | |
-| TestCreateUserDuplicate | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCreateUserConcurrentSameAccount | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCreateUserPasswordTooShort | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCreateUserNoCompositionRule | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCreateUserCommonPassword | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCreateUserBreachedPassword | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCreateSession | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCreateSessionWrongPassword | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCreateSessionUnknownAccountRunsHash | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCreateSessionIssuesNewToken | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCreateSessionMixedCaseAccount | httpapi/auth_test.go | 沿用 | 2 | |
-| TestPasswordNormalized | httpapi/auth_test.go | 沿用 | 2 | |
+| TestCreateUserSetsSessionCookie | httpapi/auth_test.go | 沿用（cookie 屬性、43 字元 token、小寫 account；`Location` 與 RFC 3339 斷言不適用，因為沒有 REST） | 2 | `test/integration/auth.test.ts` "creates a lowercase user, signs it in and stores only the token's SHA-256"（cookie 屬性由 2b 補） |
+| TestCreateUserDuplicate | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "refuses a username that differs only in case" |
+| TestCreateUserConcurrentSameAccount | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "lets exactly one of ten concurrent sign-ups of the same username through" |
+| TestCreateUserPasswordTooShort | httpapi/auth_test.go | 沿用 | 2 | `src/features/auth/__tests__/credentials.test.ts` "rejects a 14-character password"；`test/integration/auth.test.ts` "rejects a password on the common-password list and a too-short one" |
+| TestCreateUserNoCompositionRule | httpapi/auth_test.go | 沿用 | 2 | `src/features/auth/__tests__/credentials.test.ts` "has no composition rule: a long all-lowercase password is fine" |
+| TestCreateUserCommonPassword | httpapi/auth_test.go | 沿用 | 2 | `src/features/auth/__tests__/password.test.ts` "finds a 15-character password on the common-password list"；`test/integration/auth.test.ts` "rejects a password on the common-password list and a too-short one" |
+| TestCreateUserBreachedPassword | httpapi/auth_test.go | 沿用（HIBP 外洩檢查屬 requirements F4，D4 延後；2026-11-03 由步驟 2 改標，原表與 F4 不一致） | 4 | |
+| TestCreateSession | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "signs in with the right password, case-insensitively, and refuses a wrong one" |
+| TestCreateSessionWrongPassword | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "signs in with the right password, case-insensitively, and refuses a wrong one" |
+| TestCreateSessionUnknownAccountRunsHash | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "checks one hash for an unknown username and answers the same as for a wrong password" |
+| TestCreateSessionIssuesNewToken | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "issues a new token on every sign-in and ends the session the request carried" |
+| TestCreateSessionMixedCaseAccount | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "signs in with the right password, case-insensitively, and refuses a wrong one" |
+| TestPasswordNormalized | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "treats full-width and half-width passwords as the same (NFKC)"；`src/features/auth/__tests__/password.test.ts` "folds full-width characters with NFKC" |
 | TestCreateSessionDisabledAccount | httpapi/auth_test.go | 沿用（停用是 admin 功能，隨 F5 延後） | 4 | |
-| TestMe | httpapi/auth_test.go | 沿用（UUIDv7 id、account、role，改由頁面或 action 讀取） | 2 | |
-| TestMeWithoutCookie | httpapi/auth_test.go | 沿用 | 2 | |
-| TestMeWithUnknownToken | httpapi/auth_test.go | 沿用 | 2 | |
+| TestMe | httpapi/auth_test.go | 沿用（UUIDv7 id、username，改由頁面或 action 讀取；`role` 欄只有 admin 用得到，隨 F5 延後） | 2 | `test/integration/auth.test.ts` "authenticates a live token and nothing else"（頁面讀取由 2c 補） |
+| TestMeWithoutCookie | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "authenticates a live token and nothing else" |
+| TestMeWithUnknownToken | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "authenticates a live token and nothing else" |
 | TestInvalidSessionCookieCleared | httpapi/auth_test.go | 偏離：Next 不允許 render 期間（server component）設定 cookie（官方 data-security 指南「Avoiding side-effects during rendering」），所以用 GET 開頁時清不掉失效的 cookie；只能在 proxy.ts 或 action 回應裡清。見 D2 偏離清單候選 #5 | 2 | |
 | TestMeIgnoresBearer | httpapi/auth_test.go | 沿用 | 2 | |
 | TestMeDisabledAccount | httpapi/auth_test.go | 沿用（停用隨 F5 延後） | 4 | |
-| TestMeAfterUserDeleted | httpapi/auth_test.go | 沿用 | 2 | |
-| TestSessionIdleExpiry | httpapi/auth_test.go | 沿用 | 2 | |
-| TestSessionAbsoluteExpiry | httpapi/auth_test.go | 沿用 | 2 | |
+| TestMeAfterUserDeleted | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "deletes the user and its sessions within ten minutes of signing in, and asks to sign in again after" |
+| TestSessionIdleExpiry | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "ends a session idle for a day and one older than seven days" |
+| TestSessionAbsoluteExpiry | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "ends a session idle for a day and one older than seven days" |
 | TestDeleteCurrentSessionClearsCookie | httpapi/auth_test.go | 沿用 | 2 | |
-| TestDeleteCurrentSessionRevokes | httpapi/auth_test.go | 沿用 | 2 | |
-| TestDeleteAllSessions | httpapi/auth_test.go | 沿用 | 2 | |
+| TestDeleteCurrentSessionRevokes | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "signs out the current session and, everywhere, all of them" |
+| TestDeleteAllSessions | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "signs out the current session and, everywhere, all of them" |
 | TestAdminDisablesUserRevokesSessions | httpapi/auth_test.go | 沿用 | 4 | |
 | TestLastAdminCannotBeDisabled | httpapi/auth_test.go | 沿用 | 4 | |
 | TestConcurrentAdminDisableLeavesOne | httpapi/auth_test.go | 沿用 | 4 | |
 | TestNonAdminCannotPatchUser | httpapi/auth_test.go | 沿用 | 4 | |
 | TestUnauthenticatedBeforeValidation | httpapi/auth_test.go | 沿用（每個 action 先 `requireSession()` 再做 zod 驗證） | 2 | |
-| TestLoginThrottlePerAccount | httpapi/auth_test.go | 沿用（記憶體實作，spike §5 已跑出同樣行為；Retry-After 改成 action 回傳的 `retryAfter`） | 2 | |
-| TestLoginThrottleConcurrent | httpapi/auth_test.go | 沿用（spike §5：20 個同時送 → 5 個檢查密碼、15 個被節流、只做 5 次雜湊） | 2 | |
+| TestLoginThrottlePerAccount | httpapi/auth_test.go | 沿用（記憶體實作，spike §5 已跑出同樣行為；Retry-After 改成 action 回傳的 `retryAfter`） | 2 | `test/integration/auth.test.ts` "throttles a username from one source after five failures, not the owner elsewhere"（action 回傳 `retryAfter` 由 2b 補） |
+| TestLoginThrottleConcurrent | httpapi/auth_test.go | 沿用（spike §5：20 個同時送 → 5 個檢查密碼、15 個被節流、只做 5 次雜湊） | 2 | `test/integration/auth.test.ts` "checks five passwords out of twenty concurrent attempts and throttles the rest" |
 | TestRateLimitAuthOperations | httpapi/auth_test.go | 沿用 | 2 | |
-| TestCredentialsNeverLogged | httpapi/auth_test.go | 沿用 | 2 | |
-| TestSecurityEventsLogged | httpapi/auth_test.go | 沿用（`authz.denied` 那一筆來自 admin 操作，步驟 4 補上） | 2 | |
+| TestCredentialsNeverLogged | httpapi/auth_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "logs sign-up, sign-in, failures and sign-out with user ids, never the password, token or unknown username"（action 層與 cookie 值由 2b 補） |
+| TestSecurityEventsLogged | httpapi/auth_test.go | 沿用（`authz.denied` 那一筆來自 admin 操作，步驟 4 補上） | 2 | `test/integration/auth.test.ts` "logs sign-up, sign-in, failures and sign-out with user ids, never the password, token or unknown username"（`request_id` 由 2b 補） |
 | TestGetUser | httpapi/auth_resources_test.go | 沿用（讀取他人帳號只有 admin 需要；本人的部分由 TestMe 涵蓋） | 4 | |
 | TestGetOtherUserNotFound | httpapi/auth_resources_test.go | 沿用 | 4 | |
 | TestListUsers | httpapi/auth_resources_test.go | 沿用 | 4 | |
 | TestNonAdminCannotListUsers | httpapi/auth_resources_test.go | 沿用 | 4 | |
 | TestCreateSessionReturnsSession | httpapi/auth_resources_test.go | 不適用：測的是 201、`Location` 與 Session 回應主體（REST，計畫 D3=A 不做）；session 的時間欄位由 TestListSessions 涵蓋 | 2 | |
-| TestGetCurrentSession | httpapi/auth_resources_test.go | 沿用 | 2 | |
-| TestListSessions | httpapi/auth_resources_test.go | 沿用 | 2 | |
-| TestListSessionsExcludesExpired | httpapi/auth_resources_test.go | 沿用 | 2 | |
-| TestDeleteSession | httpapi/auth_resources_test.go | 沿用 | 2 | |
-| TestDeleteOtherUsersSession | httpapi/auth_resources_test.go | 沿用 | 2 | |
-| TestDeleteCurrentUser | httpapi/auth_resources_test.go | 沿用（items 的斷言在步驟 3 加上，稽核列在步驟 4 加上） | 2 | |
+| TestGetCurrentSession | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "lists the viewer's live sessions newest first and marks the current one" |
+| TestListSessions | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "lists the viewer's live sessions newest first and marks the current one" |
+| TestListSessionsExcludesExpired | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "lists the viewer's live sessions newest first and marks the current one" |
+| TestDeleteSession | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "revokes the viewer's own session but not another user's" |
+| TestDeleteOtherUsersSession | httpapi/auth_resources_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "revokes the viewer's own session but not another user's" |
+| TestDeleteCurrentUser | httpapi/auth_resources_test.go | 沿用（items 的斷言在步驟 3 加上，稽核列在步驟 4 加上） | 2 | `test/integration/auth.test.ts` "deletes the user and its sessions within ten minutes of signing in, and asks to sign in again after" |
 | TestDeleteCurrentUserLastAdmin | httpapi/auth_resources_test.go | 沿用 | 4 | |
 | TestAdminDeletesUser | httpapi/auth_resources_test.go | 沿用 | 4 | |
 | TestRateLimitPerIPBehindTrustedProxy | httpapi/ratelimit_test.go | 沿用 | 2 | |
 | TestRateLimitIgnoresXFFFromUntrustedPeer | httpapi/ratelimit_test.go | 沿用（選項 P：preload 補上 peer）／偏離（選項 N：只靠網路隔離，app 層無從判斷 peer），待 Will；見 D2 偏離清單候選 #3 | 2 | |
 | TestRateLimitOnlyNamedOperations | httpapi/ratelimit_test.go | 沿用（只有註冊與登入的 action 受限） | 2 | |
-| TestIPLimiterRefillsAndSweeps | httpapi/ratelimit_test.go | 沿用（spike `test/unit.test.ts` 已移植並通過） | 2 | |
-| TestIPLimiterKeysIPv6By64 | httpapi/ratelimit_test.go | 沿用（spike 已移植並通過） | 2 | |
-| TestSignInThrottlePerClient | httpapi/throttle_test.go | 沿用（spike §5 實測） | 2 | |
+| TestIPLimiterRefillsAndSweeps | httpapi/ratelimit_test.go | 沿用（spike `test/unit.test.ts` 已移植並通過） | 2 | `src/features/auth/__tests__/throttle.test.ts` "refills a bucket over time and drops buckets idle for a minute" |
+| TestIPLimiterKeysIPv6By64 | httpapi/ratelimit_test.go | 沿用（spike 已移植並通過） | 2 | `src/features/auth/__tests__/throttle.test.ts` "limits an IPv6 /64 as one client" |
+| TestSignInThrottlePerClient | httpapi/throttle_test.go | 沿用（spike §5 實測） | 2 | `src/features/auth/__tests__/throttle.test.ts` "counts each source on its own and clears the username on success"；`test/integration/auth.test.ts` "throttles a username from one source after five failures, not the owner elsewhere" |
 | TestUntrustedClientsLockedTrustedDeviceNot | httpapi/throttle_test.go | 沿用 | 4 | |
 | TestDeviceCookieIsPerAccount | httpapi/throttle_test.go | 沿用 | 4 | |
 | TestSignOutEverywhereForgetsDevices | httpapi/throttle_test.go | 沿用 | 4 | |
@@ -112,16 +112,16 @@
 | TestProblemCarriesRequestID | httpapi/middleware_test.go | 不適用：沒有 problem 主體；錯誤頁可顯示 Next 的 `digest` | 1 | |
 | TestPanicLogAndAccessLogCarryRequestID | httpapi/middleware_test.go | 偏離：Next 不寫 access log（改由 Caddy 的 `log`）；未捕捉的錯誤改走 `instrumentation.ts` 的 `onRequestError` | 1 | |
 | TestSecurityHeaders | httpapi/middleware_test.go | 沿用（`next.config` headers 或 proxy.ts；CSP 在步驟 1） | 1 | |
-| TestClientIP | httpapi/middleware_test.go | 沿用（spike 已移植全部 7 個子案例並通過；peer 的來源見候選 #3） | 2 | |
+| TestClientIP | httpapi/middleware_test.go | 沿用（spike 已移植全部 7 個子案例並通過；peer 的來源見候選 #3） | 2 | `src/features/auth/__tests__/throttle.test.ts` describe "clientIP"（7 個子案例，"untrusted peer ignores XFF" 起） |
 | TestAccessLogAbortBeforeWriting | httpapi/middleware_test.go | 不適用：專測 Go 的 `http.ErrAbortHandler` | 1 | |
 | TestResponseControllerReachesConnection | httpapi/middleware_test.go | 不適用：專測 Go middleware 包裝器的 `Unwrap` | 1 | |
-| TestArgon2Hash | modules/auth/service_test.go | 沿用（spike：參數相同；遇到格式錯誤的雜湊 `@node-rs/argon2` 會丟例外，不是回傳 false，包裝函式要把它轉成「不符合」） | 2 | |
-| TestArgonConcurrencyBounded | modules/auth/service_test.go | 沿用（spike 做了 semaphore 原型；計畫的 mutation「拿掉同時雜湊數上限」要讓這個測試失敗） | 2 | |
-| TestLoginThrottleSchedule | modules/auth/service_test.go | 沿用（spike 已移植並通過） | 2 | |
-| TestCleanup | modules/auth/service_test.go | 沿用（sessions 部分；節流狀態改成記憶體的 sweep；devices 在步驟 4） | 2 | |
-| TestShortIdleLimitKeepsUsedSession | modules/auth/service_test.go | 沿用 | 2 | |
+| TestArgon2Hash | modules/auth/service_test.go | 沿用（spike：參數相同；遇到格式錯誤的雜湊 `@node-rs/argon2` 會丟例外，不是回傳 false，包裝函式要把它轉成「不符合」） | 2 | `src/features/auth/__tests__/password.test.ts` "hashes with OWASP's argon2id parameters and verifies hashes made with others"、"treats the unparsable hash %j as a mismatch" |
+| TestArgonConcurrencyBounded | modules/auth/service_test.go | 沿用（spike 做了 semaphore 原型；計畫的 mutation「拿掉同時雜湊數上限」要讓這個測試失敗） | 2 | `src/features/auth/__tests__/password.test.ts` "runs at most maxConcurrent hashes at once"（Go 的「等待中的雜湊隨 context 取消」不適用：action 拿不到請求的取消訊號，2a review 後拿掉未使用的 AbortSignal） |
+| TestLoginThrottleSchedule | modules/auth/service_test.go | 沿用（spike 已移植並通過） | 2 | `src/features/auth/__tests__/throttle.test.ts` "waits 2^(n-5) minutes after the n-th failure, at most an hour, and does not count a refused attempt" |
+| TestCleanup | modules/auth/service_test.go | 沿用（sessions 部分；節流狀態改成記憶體的 sweep；devices 在步驟 4） | 2 | `test/integration/auth.test.ts` "cleans up expired sessions and day-old sign-in counts"；`src/features/auth/__tests__/throttle.test.ts` "forgets counts untouched for a day" |
+| TestShortIdleLimitKeepsUsedSession | modules/auth/service_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "keeps a session used every 20 seconds alive under a 30-second idle limit" |
 | TestMain | modules/auth/schema_test.go | 不適用：Go 測試基礎設施 | 2 | |
 | TestBaselineAppliesWithCommunity | modules/auth/schema_test.go | 偏離：Atlas 版本表的部分改用 D1 選定的 migration 工具；「app 角色只有 DML、碰不到 migration 自己的表」的斷言沿用 | 1 | |
-| TestSchemaChecks | modules/auth/schema_test.go | 沿用（users、sessions 的 check 約束在步驟 2；`sign_in_throttles` 在步驟 4） | 2 | |
-| TestForeignKeysToUsersAllowDeletion | modules/auth/schema_test.go | 沿用 | 2 | |
+| TestSchemaChecks | modules/auth/schema_test.go | 沿用（users、sessions 的 check 約束在步驟 2；`sign_in_throttles` 在步驟 4） | 2 | `test/integration/auth.test.ts` "rejects an uppercase or too-short username and a token hash that is not 32 bytes" |
+| TestForeignKeysToUsersAllowDeletion | modules/auth/schema_test.go | 沿用 | 2 | `test/integration/auth.test.ts` "lets every foreign key to users follow a deleted account (cascade or set null)" |
 | TestAuditEventsAppendOnly | modules/auth/schema_test.go | 沿用 | 4 | |
