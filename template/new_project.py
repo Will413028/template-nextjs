@@ -57,9 +57,10 @@ class GenerateError(Exception):
     pass
 
 
-def run_git(cwd: pathlib.Path, *args: str, stdin: bytes | None = None) -> bytes:
+def run_git(cwd: pathlib.Path, *args: str, stdin: bytes | None = None, ok: tuple[int, ...] = (0,)) -> bytes:
+    """git's stdout; any exit code outside ok is an error, never an empty result."""
     result = subprocess.run(["git", *args], cwd=cwd, input=stdin, capture_output=True, check=False)
-    if result.returncode != 0:
+    if result.returncode not in ok:
         raise GenerateError(f"git {' '.join(args)} failed in {cwd}: {result.stderr.decode(errors='replace').strip()}")
     return result.stdout
 
@@ -96,7 +97,9 @@ def export(top: pathlib.Path, sha: str, into: pathlib.Path, *pathspecs: str) -> 
     into.mkdir()
     try:
         with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
-            tar.extractall(into, filter="data")  # refuses absolute links and links leaving the tree
+            # Python's recommended filter (the default from 3.14). Defence in depth: git trees hold no absolute or ../
+            # paths, and links are refused after the export anyway
+            tar.extractall(into, filter="data")
     except tarfile.FilterError as error:
         raise GenerateError(f"the template holds an entry the export refuses: {error}") from error
 
@@ -105,11 +108,8 @@ def materialize(top: pathlib.Path, out: pathlib.Path, name: str, repo: str) -> s
     """Write the checked output tree of top's HEAD to out (which must not exist). Returns the template commit."""
     sha = run_git(top, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
     # git archive applies export-ignore and export-subst; the output must be the committed files, nothing else
-    found = subprocess.run(["git", "grep", "-l", "-E", "export-(ignore|subst)", sha, "--", ":(glob)**/.gitattributes"],
-                           cwd=top, capture_output=True, check=False)
-    if found.returncode not in (0, 1):  # 1: no match
-        raise GenerateError(f"git grep failed in {top}: {found.stderr.decode(errors='replace').strip()}")
-    if found.returncode == 0:
+    # git grep exits 1 when nothing matches
+    if run_git(top, "grep", "-l", "-E", "export-(ignore|subst)", sha, "--", ":(glob)**/.gitattributes", ok=(0, 1)):
         raise GenerateError("a .gitattributes sets export-ignore or export-subst, which would change the output")
     export(top, sha, out, ".", *(f":!{prefix}" for prefix in EXCLUDED))
     if not (out / "package.json").is_file():
