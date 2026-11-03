@@ -57,6 +57,7 @@
   "dashboard": {
     "title": "Dashboard",
     "overview": "Overview",
+    "items": "Items",
     "settings": "Settings",
     "welcome": "Welcome, {username}",
     "intro": "Your account's home. Add your own pages next to Overview and Settings.",
@@ -76,5 +77,37 @@
     "deleteConfirm": "I understand this cannot be undone",
     "deleteAccount": "Delete my account",
     "signInAgain": "Sign in again"
+  },
+  "items": {
+    "title": "Items",
+    "intro": "Your own list, newest first. Nobody else can see it.",
+    "newItem": "New item",
+    "editTitle": "Edit item",
+    "titleLabel": "Title",
+    "descriptionLabel": "Description",
+    "descriptionHint": "Optional.",
+    "add": "Add item",
+    "save": "Save changes",
+    "back": "Back to items",
+    "delete": "Delete item",
+    "deleteDescription": "Deletes this item for good.",
+    "empty": "No items yet. Add your first one above.",
+    "updatedAt": "Updated {at}",
+    "pagination": "Pages",
+    "nextPage": "Older items",
+    "firstPage": "Newest items",
+    "errors": {
+      "invalid_input": "Some fields are invalid.",
+      "not_found": "This item no longer exists.",
+      "unauthenticated": "Your session has ended. Please sign in again."
+    },
+    "fields": {
+      "required": "Required.",
+      "too_short": "Required.",
+      "too_long": "Too long: at most 200 characters.",
+      "null_not_allowed": "Required.",
+      "out_of_range": "Out of range.",
+      "invalid": "Invalid."
+    }
   }
 }

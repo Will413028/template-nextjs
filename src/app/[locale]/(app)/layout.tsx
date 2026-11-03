@@ -21,6 +21,7 @@ export default async function AppLayout({
         </Link>
         <nav className="flex gap-1">
           <NavLink href="/dashboard">{t("overview")}</NavLink>
+          <NavLink href="/items">{t("items")}</NavLink>
           <NavLink href="/settings">{t("settings")}</NavLink>
         </nav>
         <div className="flex-1" />

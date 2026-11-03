@@ -57,6 +57,7 @@
   "dashboard": {
     "title": "Dashboard",
     "overview": "總覽",
+    "items": "項目",
     "settings": "設定",
     "welcome": "歡迎，{username}",
     "intro": "這是你帳號的首頁。在總覽與設定旁邊加上你自己的頁面。",
@@ -76,5 +77,37 @@
     "deleteConfirm": "我了解這個動作無法復原",
     "deleteAccount": "刪除我的帳號",
     "signInAgain": "重新登入"
+  },
+  "items": {
+    "title": "項目",
+    "intro": "只屬於你的清單，最新的在最上面。其他人看不到。",
+    "newItem": "新增項目",
+    "editTitle": "編輯項目",
+    "titleLabel": "標題",
+    "descriptionLabel": "說明",
+    "descriptionHint": "選填。",
+    "add": "新增項目",
+    "save": "儲存變更",
+    "back": "回到項目列表",
+    "delete": "刪除項目",
+    "deleteDescription": "永久刪除這個項目。",
+    "empty": "還沒有項目，從上面新增第一個。",
+    "updatedAt": "更新於 {at}",
+    "pagination": "分頁",
+    "nextPage": "較舊的項目",
+    "firstPage": "最新的項目",
+    "errors": {
+      "invalid_input": "部分欄位不正確。",
+      "not_found": "這個項目已經不存在。",
+      "unauthenticated": "登入已失效，請重新登入。"
+    },
+    "fields": {
+      "required": "必填。",
+      "too_short": "必填。",
+      "too_long": "太長：最多 200 個字。",
+      "null_not_allowed": "必填。",
+      "out_of_range": "超出範圍。",
+      "invalid": "不正確。"
+    }
   }
 }

@@ -1,7 +1,8 @@
+import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import en from "../../messages/en.json";
 import zhTW from "../../messages/zh-TW.json";
-import { actionIds } from "./action-client";
+import { actionId, actionIds, callAction } from "./action-client";
 import { signUpToSignOut, visitor } from "./flow";
 import { type NextServer, startNext } from "./next-server";
 import {
@@ -124,5 +125,152 @@ describe("a TRUSTED_PROXIES that does not parse", () => {
     } finally {
       await broken.stop();
     }
+  });
+});
+
+// The items pages and their forms (plan step 3b), ported from template-go-nextjs httpapi/items_test.go where Go
+// tested what a page or a form now does (docs/plans/2026-11-03-nextjs-template/items-parity.md). The forms are posted
+// as FormData, the way the browser posts them; test/integration/items.test.ts covers the queries case by case.
+describe("the items pages", () => {
+  const hex = () => randomBytes(4).toString("hex");
+
+  async function signedIn() {
+    const user = visitor(server.base, actionIds());
+    expect(
+      await user.act("signUp", [
+        null,
+        { username: `items-${hex()}`, password: "a long enough password" },
+      ]),
+    ).toEqual({ ok: true });
+    return user;
+  }
+
+  // The new item's id, from what createItem answered.
+  function createdId(result: unknown): string {
+    const created = result as { ok?: boolean; item?: { id?: string } };
+    if (!created.ok || !created.item?.id) {
+      throw new Error(`no item created: ${JSON.stringify(result)}`);
+    }
+    return created.item.id;
+  }
+
+  it("let a user add an item, find it listed, change it and delete it, through the forms", async () => {
+    const user = await signedIn();
+    const title = `Buy milk ${hex()}`;
+    const id = createdId(
+      await user.submit(
+        "createItem",
+        { title, description: "two litres" },
+        "/en/items",
+      ),
+    );
+    const list = await user.get("/en/items");
+    expect(list.status).toBe(200);
+    expect(list.html).toContain(title);
+    expect(list.html).toContain(`href="/en/items/${id}"`);
+    const page = await user.get(`/en/items/${id}`);
+    expect(page.status).toBe(200);
+    expect(page.html).toContain("two litres");
+    // a form cannot send null: its empty description clears the item's
+    expect(
+      await user.submit(
+        "updateItem",
+        { id, title: "Buy oat milk", description: "" },
+        `/en/items/${id}`,
+      ),
+    ).toMatchObject({
+      ok: true,
+      item: { id, title: "Buy oat milk", description: null },
+    });
+    expect(await user.submit("deleteItem", { id }, `/en/items/${id}`)).toEqual({
+      ok: true,
+    });
+    expect((await user.get(`/en/items/${id}`)).status).toBe(404);
+  });
+
+  it("show a user none of another user's items: not listed, its page not found, and the forms change nothing", async () => {
+    const alice = await signedIn();
+    const bob = await signedIn();
+    const title = `alice's ${hex()}`;
+    const id = createdId(
+      await alice.submit("createItem", { title, description: "" }, "/en/items"),
+    );
+    expect((await bob.get("/en/items")).html).not.toContain(title);
+    expect((await bob.get(`/en/items/${id}`)).status).toBe(404);
+    const notFound = { ok: false, code: "not_found" };
+    expect(
+      await bob.submit(
+        "updateItem",
+        { id, title: "bob was here", description: "" },
+        "/en/items",
+      ),
+    ).toEqual(notFound);
+    expect(await bob.submit("deleteItem", { id }, "/en/items")).toEqual(
+      notFound,
+    );
+    const still = await alice.get(`/en/items/${id}`);
+    expect(still.status).toBe(200);
+    expect(still.html).toContain(title);
+  });
+
+  it.each(["/en/items/42", "/en/items?cursor=not-a-cursor"])(
+    "answers %s with not found",
+    async (path) => {
+      const user = await signedIn();
+      expect((await user.get(path)).status).toBe(404);
+    },
+  );
+
+  it("pages through the list: older items behind a next-page link, and a link back to the newest", async () => {
+    const user = await signedIn();
+    // item-00 is the oldest; a page holds 20, so it alone is on the second
+    for (let i = 0; i <= 20; i++) {
+      const title = `item-${String(i).padStart(2, "0")}`;
+      createdId(
+        await user.submit(
+          "createItem",
+          { title, description: "" },
+          "/en/items",
+        ),
+      );
+    }
+    const first = await user.get("/en/items");
+    expect(first.html).toContain("item-20");
+    expect(first.html).not.toContain("item-00");
+    const next = /href="(\/en\/items\?cursor=[A-Za-z0-9_-]+)"/.exec(
+      first.html,
+    )?.[1];
+    if (!next) throw new Error("no next-page link on the first page");
+    const second = await user.get(next);
+    expect(second.status).toBe(200);
+    expect(second.html).toContain("item-00");
+    expect(second.html).not.toContain("item-01");
+    expect(second.html).toContain('href="/en/items"');
+  });
+
+  it("sends a visitor without a session to sign in", async () => {
+    const response = await fetch(`${server.base}/en/items`, {
+      redirect: "manual",
+    });
+    expect(response.status).toBe(307);
+    expect(
+      new URL(response.headers.get("location") ?? "", server.base).pathname,
+    ).toBe("/en/sign-in");
+  });
+
+  // CSRF (ADR api-and-auth-baseline D5): a cross-site request is refused before the action runs (src/proxy.ts).
+  it("does not create an item from a cross-site request", async () => {
+    const user = await signedIn();
+    const title = `csrf ${hex()}`;
+    const response = await callAction({
+      base: server.base,
+      id: actionId(actionIds(), "createItem"),
+      form: { title, description: "" },
+      path: "/en/items",
+      cookie: `__Host-session=${user.session()}`,
+      headers: { "Sec-Fetch-Site": "cross-site" },
+    });
+    expect(response.status).toBe(403);
+    expect((await user.get("/en/items")).html).not.toContain(title);
   });
 });

@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Viewer } from "@/features/auth/server";
-import type { Database } from "@/server/db";
+import { type Database, db } from "@/server/db";
 import {
   type FieldErrors,
   parseItemPatch,
@@ -130,3 +130,7 @@ export function itemQueries(db: Database) {
     },
   };
 }
+
+// The queries over the app's pool, for server.ts and actions.ts. Made per call: they hold no state, and db() makes
+// the pool on first use, so `next build` never connects.
+export const queries = () => itemQueries(db());

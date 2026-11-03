@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { expect } from "vitest";
-import { callAction } from "./action-client";
+import { actionId, callAction } from "./action-client";
 
 // What a user does from the first visit to signing out (plan step 2 acceptance), without a browser: Server Actions
 // posted the way React posts them, pages fetched, cookies kept the way a browser keeps them. pages.test.ts runs it
@@ -24,9 +24,25 @@ export function visitor(base: string, ids: Record<string, string>) {
   return {
     session: () => jar.get(SESSION),
     async act(name: string, args: unknown[]): Promise<unknown> {
-      const id = ids[`src/features/auth/actions.ts#${name}`];
-      if (!id) throw new Error(`no action ${name} in the build`);
+      const id = actionId(ids, name);
       const response = await callAction({ base, id, args, cookie: cookie() });
+      keep(response.setCookie);
+      return response.result;
+    },
+    // A form posted to its action from the page at path, the way the browser posts it (FormData).
+    async submit(
+      name: string,
+      form: Record<string, string>,
+      path: string,
+    ): Promise<unknown> {
+      const id = actionId(ids, name);
+      const response = await callAction({
+        base,
+        id,
+        form,
+        path,
+        cookie: cookie(),
+      });
       keep(response.setCookie);
       return response.result;
     },

@@ -2,15 +2,16 @@
 
 import { Link, usePathname } from "@/i18n/navigation";
 
-// A link in the app's top bar, marked as the current page when it is one.
+// A link in the app's top bar, marked as the current page when it is that page or one under it.
 export function NavLink({
   href,
   children,
 }: {
-  href: "/dashboard" | "/settings";
+  href: "/dashboard" | "/items" | "/settings";
   children: React.ReactNode;
 }) {
-  const current = usePathname() === href;
+  const pathname = usePathname();
+  const current = pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       href={href}

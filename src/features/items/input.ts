@@ -19,7 +19,7 @@ const FIELD_CODES = [
   "out_of_range",
   "invalid",
 ] as const;
-type FieldCode = (typeof FIELD_CODES)[number];
+export type FieldCode = (typeof FIELD_CODES)[number];
 type Field = "title" | "description" | "limit" | "cursor";
 export type FieldErrors = Partial<Record<Field, FieldCode>>;
 

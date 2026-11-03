@@ -20,6 +20,18 @@ export function actionIds(nextDir = ".next"): Record<string, string> {
   );
 }
 
+// The id of the action called name, whichever feature's actions.ts exports it (the names are unique across features).
+export function actionId(ids: Record<string, string>, name: string): string {
+  const found = Object.entries(ids).filter(([key]) =>
+    key.endsWith(`/actions.ts#${name}`),
+  );
+  const [entry] = found;
+  if (found.length !== 1 || !entry) {
+    throw new Error(`${found.length} actions named ${name} in the build`);
+  }
+  return entry[1];
+}
+
 export type ActionResponse = {
   status: number;
   setCookie: string[];
@@ -32,6 +44,8 @@ export async function callAction(options: {
   base: string;
   id: string;
   args?: unknown[];
+  // instead of args: a form's fields, sent as useActionState calls a form's action, (null, FormData)
+  form?: Record<string, string>;
   path?: string;
   cookie?: string;
   headers?: Record<string, string>;
@@ -42,12 +56,15 @@ export async function callAction(options: {
     redirect: "manual",
     headers: {
       "Next-Action": options.id,
-      "Content-Type": "text/plain;charset=UTF-8",
+      // a FormData body sets its own multipart Content-Type
+      ...(options.form ? {} : { "Content-Type": "text/plain;charset=UTF-8" }),
       Accept: "text/x-component",
       ...(options.cookie ? { Cookie: options.cookie } : {}),
       ...options.headers,
     },
-    body: JSON.stringify(options.args ?? []),
+    body: options.form
+      ? formReply(options.form)
+      : JSON.stringify(options.args ?? []),
   });
   const raw = await response.text();
   return {
@@ -56,6 +73,18 @@ export async function callAction(options: {
     requestId: response.headers.get("x-request-id"),
     result: decodeResult(raw),
   };
+}
+
+// What React's client posts for an action called with (previous state, FormData): the form's fields under the
+// prefix "_1_", and the arguments, the FormData written as the reference "$K1", in part "0" (react-server-dom-webpack
+// processReply, bundled with next 16.4.3; its server side decodeReply reads them back).
+function formReply(fields: Record<string, string>): FormData {
+  const body = new FormData();
+  for (const [name, value] of Object.entries(fields)) {
+    body.append(`_1_${name}`, value);
+  }
+  body.set("0", JSON.stringify([null, "$K1"]));
+  return body;
 }
 
 // Row 0 of the RSC payload carries {"a":"$@N"}; row N is the action's return value as JSON, or E<error> when it threw.
