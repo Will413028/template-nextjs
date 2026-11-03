@@ -149,9 +149,9 @@ jobs:
           test "$(jq -r .status /tmp/health.json)" = ok
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/en)" = 200
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/zh-TW)" = 200
-      - name: Every script on every locale's page and on a 404 carries this response's CSP nonce
+      - name: Every script on the home, sign-in and sign-up pages and on a 404 carries this response's CSP nonce
         run: |
-          for path in en zh-TW en/no-such-page; do
+          for path in en zh-TW en/sign-in zh-TW/sign-up en/no-such-page; do
             curl -sS -D /tmp/page.headers -o /tmp/page.html "http://localhost/$path"
             nonce="$(tr -d '\r' < /tmp/page.headers | sed -n "s/^content-security-policy:.*'nonce-\([^']*\)'.*/\1/Ip")"
             test -n "$nonce"

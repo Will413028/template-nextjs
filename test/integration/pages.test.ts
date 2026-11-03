@@ -26,7 +26,9 @@ const env = () => ({
 beforeAll(async () => {
   database = await startDatabase();
   await migrateAsOwner(database);
-  server = await startNext(env());
+  // a server process in a zone that is not the app's (src/i18n/request.ts sets UTC), so a page that falls back to
+  // the process's zone shows it
+  server = await startNext({ ...env(), TZ: "Pacific/Auckland" });
 }, 180_000);
 
 afterAll(async () => {
@@ -75,7 +77,7 @@ describe("the end-to-end flow", () => {
 });
 
 describe("the settings page", () => {
-  it("shows each session's times in the configured time zone, so next-intl never falls back to the server's", async () => {
+  it("shows each session's times in the configured time zone, not the server process's", async () => {
     const user = visitor(server.base, actionIds());
     const username = `zone-${Date.now().toString(36)}`;
     expect(
@@ -87,8 +89,27 @@ describe("the settings page", () => {
     const settings = await user.get("/en/settings");
     expect(settings.status).toBe(200);
     expect(settings.html).toMatch(/Signed in [^<]*UTC/);
-    expect(server.logs.join("")).not.toContain("ENVIRONMENT_FALLBACK");
   });
+});
+
+describe("the sign-in and sign-up pages", () => {
+  it.each([
+    ["/en/sign-in", en.auth.signInTitle],
+    ["/zh-TW/sign-up", zhTW.auth.signUpTitle],
+  ])(
+    "%s renders its translated form, posted with POST, every script carrying the response's nonce",
+    async (path, title) => {
+      const response = await fetch(server.base + path);
+      const html = await response.text();
+      expect(response.status).toBe(200);
+      expect(html).toContain(title);
+      // should the scripts not run, the browser posts the form itself: never the password in a URL
+      expect(html).toMatch(/<form[^>]*method="POST"/);
+      const { total, withNonce } = scripts(response, html);
+      expect(total).toBeGreaterThan(0);
+      expect(withNonce).toBe(total);
+    },
+  );
 });
 
 describe("a TRUSTED_PROXIES that does not parse", () => {
