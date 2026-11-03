@@ -10,7 +10,7 @@
 
 - 安全基線沿用 Go 版 ADR `docs/adr/2026-10-18-api-and-auth-baseline.md`、`docs/adr/2026-10-22-account-abuse-and-lifecycle.md`；認證自建（D2），因 Next.js 機制不同而偏離它的地方，要列進 D2 的偏離清單並經 Will 確認。兩份 ADR 的每條決定在本計畫的歸屬（沿用／偏離／延後／不適用，加所屬步驟 1–5）由步驟 0 (a) 列在 `auth-parity.md` 開頭的「ADR 決定歸屬表」。
 - E2E 與瀏覽器測試不在本機跑，只在 CI 跑。
-- 完成定義（每一步）：需求清單該步的每一項有 vitest 或 integration 測試（integration 測試也用 vitest 跑，併入同一份報告與測試數鎖）；`pnpm check`（步驟 1 建立）綠燈；`check_locks.py` 的測試數鎖調到新數字；需求清單該列的「狀態」欄改成「完成」。
+- 完成定義（每一步）：需求清單該步的每一項有 vitest 單元或 integration 測試（integration 測試用 vitest 的 `integration` project，只在 CI 跑，測試數另有一個鎖）；`pnpm check`（步驟 1 建立）本機綠燈且 CI 綠燈；`check_locks.py` 的測試數鎖調到新數字；需求清單該列的「狀態」欄改成「完成」。
 
 ## 前提（開工時核對過，2026-11-03）
 
@@ -18,7 +18,7 @@
 - 目錄已有自己的 `.git`（無任何 commit，分支 `main`）：`git -C <本目錄> rev-parse --show-toplevel` 指向本目錄（2026-11-03 實測）。步驟 1 不再 `git init`，直接建第一個 commit；之前仍先跑同一個指令確認不會落到 second-brain 父 repo。
 - 範本使用者是 Will 自己，有 Go 版的使用證據，省略產品風險驗證（來源：2026-11-03 對話；已確認）。
 - 工具鏈預設（可推翻）：Next.js 16、React 19、TypeScript、pnpm、Biome、vitest、next-intl、zod，和 Go 版前端相同（來源：Go 版 `frontend/package.json`）；PostgreSQL 18，DB 分 owner 與 app 兩個角色（Go 版 `deploy/postgres/initdb/10-roles.sh`）。
-- integration 測試用 testcontainers 起 PostgreSQL，和 Go 版的 `dbtest` 一樣在本機可跑（不是瀏覽器測試）（預設，可推翻）。
+- integration 測試用 testcontainers 起 PostgreSQL，用 vitest 的 `integration` project 跑（`pnpm test:integration`），只在 CI 跑；`pnpm check` 與 pre-push 只跑單元測試。測試數分 `tests.unit`、`tests.integration` 兩個鎖（Will 2026-11-03 推翻原預設「本機可跑」：開發機共用、高負載，PostgreSQL 測試容器與 compose stack 都不在本機跑）。
 - GitHub repo 建立在 `Will413028/template-nextjs`，用 dev branch 模型；public（D6）。
 
 **驗收基線：** repo 未建，無。
@@ -27,9 +27,9 @@
 
 | 不變量 | 依賴它的機制（預計的模組） |
 |---|---|
-| 資料庫只在伺服器端存取；client component 不 import DB 或認證的伺服器模組 | `src/server/`（預計）、`import "server-only"`、dependency-cruiser 規則（Go 版前端已用） |
-| 每個讀寫使用者資料的 Server Action、server component 與 Route Handler 都先驗證 session 與擁有者 | `src/server/auth/` 的 `requireSession()`（預計）；dependency-cruiser 規則：DB 模組只能由 `src/server/**` import；integration 測試：從 build manifest 列出所有 action ID，逐一不帶 cookie 呼叫，除註冊與登入外全部被拒；步驟 2 的跨使用者撤銷 session 測試、步驟 3 的跨使用者讀寫測試 |
-| session token 只存 SHA-256；cookie 是 `__Host-session; HttpOnly; Secure; SameSite=Lax`；absolute 7 日、idle 1 日；不接受 Bearer；無效 cookie 清掉；登入一律發新 token；未知帳號也跑一次雜湊；刪帳號要 10 分鐘內登入過、並撤銷所有 session；argon2id 參數與同時雜湊數上限照 Go 版 ADR；登入名稱是 username | `src/server/auth/session.ts`、`src/server/auth/password.ts`（預計）與步驟 2 的對應測試 |
+| 資料庫只在伺服器端存取；client component 不 import DB 或認證的伺服器模組 | `src/server/db.ts`、`src/server/env.ts`、`src/features/*/server/**`（D8）；`import "server-only"` 與檢查它的單元測試；`.dependency-cruiser.cjs` 的 D8 規則（`drizzle-orm`、`pg`、`src/server/db.ts` 只准 `features/*/server/**`、`src/server/**`、`app/api/health/route.ts` import） |
+| 每個讀寫使用者資料的 Server Action、server component 與 Route Handler 都先驗證 session 與擁有者 | `src/features/auth/server.ts` 的 `requireSession()`、`authedAction()`、`publicAction()` 與 branded `Viewer` 型別，DAL 函式（`features/*/server/queries.ts`）第一個參數是 `viewer: Viewer`（D8）；單元測試：`"use server"` 檔只能叫 `actions.ts`、每個 export 是 `authedAction(` 或 `publicAction(`，`publicAction` 只在 auth 的註冊與登入；dependency-cruiser 規則：DB 模組只能由 D8 列的路徑 import；integration 測試：從 build manifest 列出所有 action ID，逐一不帶 cookie 呼叫，除註冊與登入外全部被拒；步驟 2 的跨使用者撤銷 session 測試、步驟 3 的跨使用者讀寫測試 |
+| session token 只存 SHA-256；cookie 是 `__Host-session; HttpOnly; Secure; SameSite=Lax`；absolute 7 日、idle 1 日；不接受 Bearer；無效 cookie 清掉；登入一律發新 token；未知帳號也跑一次雜湊；刪帳號要 10 分鐘內登入過、並撤銷所有 session；argon2id 參數與同時雜湊數上限照 Go 版 ADR；登入名稱是 username | `src/features/auth/server/session.ts`、`src/features/auth/server/password.ts`（D8，預計）與步驟 2 的對應測試 |
 | DB 分 owner 與 app 兩個角色，app 角色只有 DML（users、sessions 等認證資料表和其他表一樣由 owner migrate） | `deploy/postgres/initdb/10-roles.sh`、migrate 命令用 owner、app 執行時用 app 角色、CI stack job 的 `intruder` 檢查 |
 | 錯誤對使用者顯示走 next-intl 訊息，不顯示伺服器內部細節 | `messages/*.json`、`error.tsx`、action 的錯誤回傳型別 |
 | 佔位名稱 `template-nextjs`／`template_nextjs` 只出現在 rename 腳本認得的檔案 | `scripts/rename.py`（從 Go 版改寫）的 `STACK_FILES`、`BRAND_FILES`、CI rename smoke job |
@@ -95,6 +95,7 @@
   - A：只用 Server Actions 給自己的畫面用，Route Handler 只有 health——Next.js 全端的標準做法，最少程式碼；代價是沒有給行動 App 或第三方用的 API，需要時再加（建議）。
   - B：Route Handlers 提供 REST 加手寫 OpenAPI，畫面也走這組 API——和另外兩個 template 的契約一致；代價是多一層，也失去 Server Actions 的簡潔。
   - 結論：A（只用 Server Actions；Route Handler 只有 health）；ADR：步驟 6 寫成 repo ADR
+  - 修訂（2026-11-03，Will）：Route Handler 是 `/api/health` 加一個清掉失效 session cookie 後導回登入頁的 GET（D2 偏離清單第 5 條需要它：server component 不能寫 cookie）；其餘仍只用 Server Actions。
 - **D4 功能範圍**（狀態：已決 2026-11-03，Will；擋住步驟：2、3、4）
   - A：精簡：認證（F1、F2）加 items（F3）；帳號濫用與管理（F4、F5）寫進延後——Next.js 全端範本通常用在較小的專案，維持輕量（建議）。
   - B：全功能：和 Go 版相同，含 F4、F5——三個範本功能對等；代價是步驟 4 的工作量大約和步驟 2、3 加起來一樣。
@@ -116,7 +117,13 @@
   - C：步驟 2 照 Go 版完整做，含 DB 的 `sign_in_throttles`、帳號層級上限與裝置 cookie——和 Go 版一致；代價是把 D4 延後的一部分拉回來。
   - 結論：A（per-IP 限流加「帳號＋來源」退避，存記憶體；D5 選 B 時重開）；ADR：步驟 6 寫成 repo ADR
 
-拍板順序：D1–D7 與 D2 偏離清單皆已決（2026-11-03）。
+- **D8 原始碼結構與依賴方向**（狀態：已決 2026-11-03，Will；擋住步驟：1；來源：步驟 1 開工時的設計 brief，查 Next.js data-security／authentication 指南、bulletproof-react、Feature-Sliced Design、create-t3-app、next-safe-action，2026-11-03）
+  - A：沿用 Go 版前端分層，加一層橫向 `src/server/`（DB、env、auth、各功能的查詢）——伺服器端程式碼集中；代價是每個功能拆成 UI 與 data 兩棵樹，Go 版的分層來自「後端是另一個程序」，在只有 Next 的 repo 不存在。
+  - B：每個 feature 是垂直切片，自己擁有 Drizzle `schema.ts`、DAL（`server/queries.ts`）、`actions.ts`、元件；`src/server/` 只放 DB client 與 env；對應 Go 版後端 modular monolith 的模組（建議）。
+  - C：照 Next 文件用單一 `data/` 加集中的 schema——兩個功能時最簡單；功能變多後 data、actions、元件分散三處。
+  - 結論：B。規則（`.dependency-cruiser.cjs`，全部 error、零例外）：無環；`lib`、`components`、`hooks`、`i18n` 不 import `features`、`app`、`server`；`src/server/**` 只 import `lib`；`features` 不 import `app`；feature 外只經 `index.ts`、`server.ts`、`schema.ts` 進入；`schema.ts` 只 import `drizzle-orm/pg-core` 與其他 feature 的 `schema.ts`；`features/auth` 不 import 其他 feature；`drizzle-orm`、`pg`、`src/server/db.ts` 只准 `features/*/server/**`、`src/server/**`、`app/api/health/route.ts`；client 側（`index.ts`、`components/**`）不 import 伺服器模組。action 一律用 `authedAction`／`publicAction` 定義，DAL 第一個參數是 `Viewer`。失效條件：兩個 feature 要互相 join 資料表時，改經對方 `server.ts` 取資料。ADR：步驟 6 寫成 repo ADR
+
+拍板順序：D1–D8 與 D2 偏離清單皆已決（2026-11-03）。
 
 ## 進度
 
