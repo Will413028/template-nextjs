@@ -27,7 +27,7 @@
 
 | 不變量 | 依賴它的機制（預計的模組） |
 |---|---|
-| 資料庫只在伺服器端存取；client component 不 import DB 或認證的伺服器模組 | `src/server/db.ts`、`src/server/env.ts`、`src/features/*/server/**`（D8）；`import "server-only"` 與檢查它的單元測試；`.dependency-cruiser.cjs` 的 D8 規則（`drizzle-orm`、`pg`、`src/server/db.ts` 只准 `features/*/server/**`、`src/server/**`、`app/api/health/route.ts` import） |
+| 資料庫只在伺服器端存取；client component 不 import DB 或認證的伺服器模組 | `src/server/db.ts`、`src/server/env.ts`、`src/features/*/server/**`（D8）；`import "server-only"` 與檢查它的單元測試；`.dependency-cruiser.cjs` 的 D8 規則與守住它的 `src/__tests__/architecture.test.ts`（`pg`、`drizzle-orm/node-postgres`、`src/server/db.ts` 只准 `features/*/server/**`、`src/server/**`、`app/api/health/route.ts` import） |
 | 每個讀寫使用者資料的 Server Action、server component 與 Route Handler 都先驗證 session 與擁有者 | `src/features/auth/server.ts` 的 `requireSession()`、`authedAction()`、`publicAction()` 與 branded `Viewer` 型別，DAL 函式（`features/*/server/queries.ts`）第一個參數是 `viewer: Viewer`（D8）；單元測試：`"use server"` 檔只能叫 `actions.ts`、每個 export 是 `authedAction(` 或 `publicAction(`，`publicAction` 只在 auth 的註冊與登入；dependency-cruiser 規則：DB 模組只能由 D8 列的路徑 import；integration 測試：從 build manifest 列出所有 action ID，逐一不帶 cookie 呼叫，除註冊與登入外全部被拒；步驟 2 的跨使用者撤銷 session 測試、步驟 3 的跨使用者讀寫測試 |
 | session token 只存 SHA-256；cookie 是 `__Host-session; HttpOnly; Secure; SameSite=Lax`；absolute 7 日、idle 1 日；不接受 Bearer；無效 cookie 清掉；登入一律發新 token；未知帳號也跑一次雜湊；刪帳號要 10 分鐘內登入過、並撤銷所有 session；argon2id 參數與同時雜湊數上限照 Go 版 ADR；登入名稱是 username | `src/features/auth/server/session.ts`、`src/features/auth/server/password.ts`（D8，預計）與步驟 2 的對應測試 |
 | DB 分 owner 與 app 兩個角色，app 角色只有 DML（users、sessions 等認證資料表和其他表一樣由 owner migrate） | `deploy/postgres/initdb/10-roles.sh`、migrate 命令用 owner、app 執行時用 app 角色、CI stack job 的 `intruder` 檢查 |
@@ -121,7 +121,7 @@
   - A：沿用 Go 版前端分層，加一層橫向 `src/server/`（DB、env、auth、各功能的查詢）——伺服器端程式碼集中；代價是每個功能拆成 UI 與 data 兩棵樹，Go 版的分層來自「後端是另一個程序」，在只有 Next 的 repo 不存在。
   - B：每個 feature 是垂直切片，自己擁有 Drizzle `schema.ts`、DAL（`server/queries.ts`）、`actions.ts`、元件；`src/server/` 只放 DB client 與 env；對應 Go 版後端 modular monolith 的模組（建議）。
   - C：照 Next 文件用單一 `data/` 加集中的 schema——兩個功能時最簡單；功能變多後 data、actions、元件分散三處。
-  - 結論：B。規則（`.dependency-cruiser.cjs`，全部 error、零例外）：無環；`lib`、`components`、`hooks`、`i18n` 不 import `features`、`app`、`server`；`src/server/**` 只 import `lib`；`features` 不 import `app`；feature 外只經 `index.ts`、`server.ts`、`schema.ts` 進入；`schema.ts` 只 import `drizzle-orm/pg-core` 與其他 feature 的 `schema.ts`；`features/auth` 不 import 其他 feature；`drizzle-orm`、`pg`、`src/server/db.ts` 只准 `features/*/server/**`、`src/server/**`、`app/api/health/route.ts`；client 側（`index.ts`、`components/**`）不 import 伺服器模組。action 一律用 `authedAction`／`publicAction` 定義，DAL 第一個參數是 `Viewer`。失效條件：兩個 feature 要互相 join 資料表時，改經對方 `server.ts` 取資料。ADR：步驟 6 寫成 repo ADR
+  - 結論：B。規則（`.dependency-cruiser.cjs`，全部 error、零例外）：無環；`lib`、`components`、`hooks`、`i18n` 不 import `features`、`app`、`server`；`src/server/**` 只 import `lib`；`features` 不 import `app`；feature 外只經 `index.ts`、`server.ts`、`schema.ts` 進入；`schema.ts` 只 import `drizzle-orm`（建構函式與 `sql`，不含 driver）與其他 feature 的 `schema.ts`；`features/auth` 不 import 其他 feature；`pg`、`drizzle-orm/node-postgres`、`src/server/db.ts` 只准 `features/*/server/**`、`src/server/**`、`app/api/health/route.ts`；client 側（`index.ts`、`components/**`）不 import 伺服器模組。action 一律用 `authedAction`／`publicAction` 定義，DAL 第一個參數是 `Viewer`。失效條件：兩個 feature 要互相 join 資料表時，改經對方 `server.ts` 取資料。ADR：步驟 6 寫成 repo ADR
 
 拍板順序：D1–D8 與 D2 偏離清單皆已決（2026-11-03）。
 

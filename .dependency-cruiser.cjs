@@ -5,6 +5,12 @@
 // (server/), its Server Actions (actions.ts) and its components. src/server/ is the thin kernel every feature shares
 // (database pool, server configuration).
 const SHARED = "^src/(lib|components|hooks|i18n)/";
+// pnpm resolves a package to node_modules/.pnpm/<name>@<version>/node_modules/<name>/, so a package path matches
+// either layout.
+const pkg = (name) => [
+  `^node_modules/${name}/`,
+  `^node_modules/\\.pnpm/[^/]+/node_modules/${name}/`,
+];
 // Only these may reach the database: a feature's server code, the kernel, and the health check.
 const DATABASE_USERS = [
   "^src/features/[^/]+/server/",
@@ -82,27 +88,25 @@ module.exports = {
     {
       name: "schema-is-table-definitions-only",
       comment:
-        "drizzle-kit loads schema.ts outside Next.js: it may import only drizzle-orm's table builders and other features' tables.",
+        "drizzle-kit loads schema.ts outside Next.js: it may import only drizzle-orm (table builders, sql) and other features' tables, never a driver.",
       severity: "error",
       from: { path: "^src/features/[^/]+/schema\\.ts$" },
       to: {
-        pathNot: [
-          "^src/features/[^/]+/schema\\.ts$",
-          "drizzle-orm/pg-core",
-          "^node_modules/drizzle-orm/",
-        ],
+        // drizzle-orm's table builders and sql``; a driver is caught by database-only-from-server-code
+        pathNot: ["^src/features/[^/]+/schema\\.ts$", ...pkg("drizzle-orm")],
       },
     },
     {
       name: "database-only-from-server-code",
       comment:
-        "The database is reached only from a feature's server/ modules, the kernel and the health check.",
+        "The database (the pool in src/server/db.ts and the pg driver) is reached only from a feature's server/ modules, the kernel and the health check. drizzle-orm's query builder (eq, sql) holds no connection.",
       severity: "error",
       from: { pathNot: DATABASE_USERS },
       to: {
         path: [
           "^src/server/db\\.ts$",
-          "^node_modules/(pg|drizzle-orm/node-postgres)/",
+          ...pkg("pg"),
+          ...pkg("drizzle-orm/node-postgres"),
         ],
       },
     },

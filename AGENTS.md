@@ -10,7 +10,7 @@ Status: walking skeleton (home page, i18n, CSP, `/api/health`, migrations, compo
 - `pnpm check` runs everything CI's app job runs: TypeScript and Biome (`pnpm lint`), knip (`pnpm check:deps`), dependency-cruiser (`pnpm check:arch`), migration checks and squawk (`pnpm check:migrations`), the unit tests (`pnpm test:report`), the locks (`pnpm check:locks`) and `next build`. A task is complete only when it passes locally and CI is green.
 - Integration tests (`test/integration/`, `pnpm test:integration`) start PostgreSQL 18 in Docker with testcontainers and the production role setup. CI's app job runs them after `pnpm check`; `pnpm check` and the pre-push hook leave them out, so a shared dev machine never starts database containers. The compose stack job also runs only in CI. Browser and E2E tests run only in CI.
 - `make lint-docker` (hadolint, pinned with checksums in the `Makefile`) checks the Dockerfile; every finding fails, infos included.
-- `git push` runs CI's checks first through the lefthook pre-push hook (all but the compose stack job, except its `make lint-docker`); it needs `actionlint`, `zizmor`, `gitleaks` and `osv-scanner` installed. Do not skip it with `--no-verify`.
+- `git push` runs CI's checks first through the lefthook pre-push hook (all but the integration tests, the rename smoke test and the compose stack job, except its `make lint-docker`); it needs `actionlint`, `zizmor`, `gitleaks` and `osv-scanner` installed. Do not skip it with `--no-verify`.
 - Suppression comments (`biome-ignore`, `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `eslint-disable`, `-- squawk-ignore`) and the number of unit and integration tests run are locked in `scripts/quality-locks.json`; `scripts/check_locks.py` fails when a count differs (unit tests: pre-push and CI; integration tests: CI). Suppressions only go down and tests only up: update the lock in the same commit.
 - A commit that edits a checker's configuration (`biome.json`, `.dependency-cruiser.cjs`, `knip.config.ts`, `tsconfig.json`, `vitest.config.mts`, `.squawk.toml`, `lefthook.yml`, any `osv-scanner.toml`, the check scripts) or moves a lock the bad way carries a `Quality-Gate: <why>` trailer, and a commit over 1,000 changed lines (files `.gitattributes` marks `linguist-generated` not counted) is split or carries a `Large-Change: <why>` trailer; `scripts/check_commit_policy.py` checks both at commit time (lefthook) and for every pushed commit (CI and pre-push).
 - Tests run in random order (vitest `sequence.shuffle`); a failure prints its seed, and `--sequence.seed=<seed>` replays it. A test that must run in order says so with `{ shuffle: false }` and a comment.
@@ -40,7 +40,7 @@ Status: walking skeleton (home page, i18n, CSP, `/api/health`, migrations, compo
 │   └── proxy.ts              # locale routing + per-request CSP nonce
 ├── messages/                 # en.json, zh-TW.json (same keys; a test checks)
 ├── migrations/               # drizzle-kit SQL migrations and meta/
-├── scripts/                  # migrate.ts (compose migrate service), check scripts, rename, init_env
+├── scripts/                  # migrate.mts (compose migrate service), check scripts, rename, init_env
 ├── test/integration/         # testcontainers PostgreSQL tests
 ├── deploy/                   # Caddyfile, PostgreSQL initdb (roles)
 ├── docker-compose.yml        # postgres → migrate → app → caddy (only caddy publishes ports)
@@ -58,12 +58,12 @@ Status: walking skeleton (home page, i18n, CSP, `/api/health`, migrations, compo
 | `app/` | everything below it; a feature only through `features/<name>/index.ts`, `server.ts` or `schema.ts` |
 | `features/<name>/` | its own files, shared layers, `server/`; another feature only through its `index.ts`, `server.ts` or `schema.ts`; never `app/` |
 | `features/auth/` | the base feature: no other feature |
-| `features/<name>/schema.ts` | only `drizzle-orm/pg-core` and other features' `schema.ts` (drizzle-kit loads it outside Next.js) |
+| `features/<name>/schema.ts` | only `drizzle-orm` (table builders, `sql`; no driver) and other features' `schema.ts` (drizzle-kit loads it outside Next.js) |
 | `server/` (kernel) | only `lib/` |
 | `lib/`, `components/`, `hooks/`, `i18n/` (shared) | each other; never `features/`, `app/` or `server/` |
 
 - No import cycles anywhere.
-- The database (`src/server/db.ts`, `pg`, `drizzle-orm/node-postgres`) is imported only from `features/*/server/**`, `src/server/**` and `app/api/health/route.ts`.
+- The database (`src/server/db.ts`, `pg`, `drizzle-orm/node-postgres`) is imported only from `features/*/server/**`, `src/server/**` and `app/api/health/route.ts`; drizzle-orm's query builder (`eq`, `sql`) holds no connection and is not restricted. `src/__tests__/architecture.test.ts` breaks these rules on purpose and checks that dependency-cruiser reports them (pnpm resolves packages under `node_modules/.pnpm/`, which a rule's pattern must match).
 - Code that can reach the browser (`features/*/index.ts`, `features/*/components/**`, `components/**`, `hooks/**`) never imports `server.ts`, `server/**` or `src/server/**`. Every server module starts with `import "server-only"` (a test checks), so a client component that reaches one through other modules fails `next build`.
 - Server configuration is read only in `src/server/env.ts` (Biome `noProcessEnv`; `src/lib/env.ts` reads only `NODE_ENV`).
 

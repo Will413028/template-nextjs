@@ -4,7 +4,7 @@
 
 ## Schema 與查詢的位置
 
-- 每個 feature 的表定義在 `src/features/<name>/schema.ts`，只用 `drizzle-orm/pg-core` 的建構函式；`drizzle.config.ts` 用 `./src/features/*/schema.ts` 收集。schema 檔會在 Next.js 之外被 drizzle-kit 載入，所以不 import `server-only` 或任何其他模組（dependency-cruiser `schema-is-table-definitions-only`）。
+- 每個 feature 的表定義在 `src/features/<name>/schema.ts`，只用 `drizzle-orm/pg-core` 的建構函式與 `drizzle-orm` 的 `sql`；`drizzle.config.ts` 用 `./src/features/*/schema.ts` 收集。schema 檔會在 Next.js 之外被 drizzle-kit 載入，所以不 import `server-only` 或任何其他模組（dependency-cruiser `schema-is-table-definitions-only`）。
 - 查詢只寫在 `src/features/<name>/server/` 下，用 Drizzle 的 query builder；第一個參數是呼叫者的身分（擁有者條件寫在查詢裡）。**NEVER** 在 `src/server/` 以外的地方建連線，或從 client 側的模組 import 資料庫（`.dependency-cruiser.cjs`）。
 - `src/server/db.ts` 只提供連線池，不認得任何表：Drizzle 的 relational query API（需要把所有 schema 傳給 `drizzle()`）不用，避免核心反過來依賴每個 feature。
 
