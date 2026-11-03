@@ -42,9 +42,9 @@ def rename(text: str, name: str, repo: str) -> str:
 
 
 def leftovers(root: pathlib.Path) -> list[str]:
-    """Tracked files outside docs/plans/ that still name the template."""
+    """Files outside docs/plans/ that still name the template, untracked ones too (not the ignored ones)."""
     found = subprocess.run(
-        ["git", "grep", "-l", "-i", "-E", "template[-_]nextjs", "--", ":!docs/plans/**"],
+        ["git", "grep", "--untracked", "-l", "-i", "-E", "template[-_]nextjs", "--", ":!docs/plans/**"],
         cwd=root, capture_output=True, text=True, check=False,
     )
     return found.stdout.split()
@@ -62,6 +62,9 @@ def main() -> int:
     repo = args.repo or f"Will413028/{name}"
     if not REPO_PATTERN.fullmatch(repo):
         parser.error(f"invalid repository {repo!r}: use owner/name")
+    # the name replacements run over the whole file after the repository link is in: they would rewrite it again
+    if OLD_NAME in repo.lower() or OLD_NAME.replace("-", "_") in repo.lower():
+        parser.error(f"repository {repo!r} names the project {OLD_NAME!r}, which the rename replaces; choose another")
     root = pathlib.Path.cwd()
     if not (root / "package.json").exists():
         parser.error("package.json not found; run from the repository root")
