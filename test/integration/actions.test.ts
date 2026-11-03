@@ -482,3 +482,122 @@ describe("sign-in throttling", () => {
     expect(other.result).toEqual({ ok: true });
   });
 });
+
+// Go middleware_test.go TestRequestID*: the id a trusted proxy (Caddy) sends is believed when well formed; anything
+// else gets a new UUIDv7. proxy.ts decides it for every request, so a page shows it as well as an action.
+describe("the request id", () => {
+  const UUID_V7 =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  const requestId = async (server: NextServer, sent: string) =>
+    (
+      await fetch(`${server.base}/en`, { headers: { "X-Request-ID": sent } })
+    ).headers.get("x-request-id");
+
+  it("is the one a trusted proxy sent", async () => {
+    expect(await requestId(main, "abc-123")).toBe("abc-123");
+    expect(await requestId(main, "a".repeat(64))).toBe("a".repeat(64));
+  });
+
+  it("is new when the peer is not a trusted proxy", async () => {
+    const id = await requestId(untrusted, "abc-123");
+    expect(id).not.toBe("abc-123");
+    expect(id).toMatch(UUID_V7);
+  });
+
+  it.each([
+    ["too long", "a".repeat(65)],
+    ["space", "abc 123"],
+    ["log injection", 'x" level=ERROR msg="forged'],
+    ["underscore", "abc_123"],
+  ])("is new when the one sent is malformed: %s", async (_, sent) => {
+    const id = await requestId(main, sent);
+    expect(id).not.toBe(sent);
+    expect(id).toMatch(UUID_V7);
+  });
+});
+
+// Go auth_test.go TestSecurityEventsLogged and TestCredentialsNeverLogged, through the actions: each event carries
+// the id of the request that caused it, and no line holds a password, a session token or an unknown username.
+describe("the security log", () => {
+  type Line = Record<string, unknown>;
+  // the JSON lines among the server's output (Next.js prints its own text too)
+  const lines = (server: NextServer): Line[] =>
+    server.logs
+      .join("")
+      .split("\n")
+      .flatMap((line) => {
+        try {
+          const parsed: unknown = JSON.parse(line);
+          return parsed && typeof parsed === "object" ? [parsed as Line] : [];
+        } catch {
+          return [];
+        }
+      });
+
+  it("tags each event with its request's id and never holds a password, a token or an unknown username", async () => {
+    const secret = randomBytes(8).toString("hex");
+    const password = `canary ${secret} phrase`;
+    const username = name("logged");
+    const nobody = name("nobody");
+    const client = from(address());
+    const up = await call(main, "signUp", [null, { username, password }], {
+      headers: client,
+    });
+    const failed = await call(
+      main,
+      "signIn",
+      [null, { username, password: `${password} wrong` }],
+      { headers: client },
+    );
+    const unknown = await call(
+      main,
+      "signIn",
+      [null, { username: nobody, password }],
+      { headers: client },
+    );
+    const signedIn = await call(
+      main,
+      "signIn",
+      [null, { username, password }],
+      {
+        headers: client,
+      },
+    );
+    const token = cookieValue(signedIn.setCookie, COOKIE) ?? "";
+    const out = await call(main, "signOut", [], { cookie: token });
+    expect(out.result).toEqual({ ok: true });
+
+    // the server writes its log asynchronously: wait for the last event
+    for (let i = 0; i < 50; i++) {
+      if (lines(main).some((l) => l.request_id === out.requestId)) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const events = (response: ActionResponse) =>
+      lines(main)
+        .filter((l) => l.request_id && l.request_id === response.requestId)
+        .map(({ event, reason }) => ({ event, reason }));
+    expect(events(up)).toEqual([{ event: "auth.sign_up", reason: undefined }]);
+    expect(events(failed)).toEqual([
+      { event: "auth.sign_in_failed", reason: "invalid_credentials" },
+    ]);
+    expect(events(unknown)).toEqual([
+      { event: "auth.sign_in_failed", reason: "unknown_username" },
+    ]);
+    expect(events(signedIn)).toEqual([
+      { event: "auth.sign_in", reason: undefined },
+    ]);
+    expect(events(out)).toEqual([
+      { event: "auth.sign_out", reason: undefined },
+    ]);
+
+    const log = main.logs.join("");
+    for (const leak of [
+      secret,
+      nobody,
+      cookieValue(up.setCookie, COOKIE) ?? "missing",
+      token || "missing",
+    ]) {
+      expect(log).not.toContain(leak);
+    }
+  });
+});

@@ -85,6 +85,12 @@ function contains(p: Prefix, a: Address): boolean {
   return a.n >> shift === p.address >> shift;
 }
 
+// Whether the address is one of the trusted proxies.
+export function isTrusted(ip: string, trusted: Prefix[]): boolean {
+  const address = parseAddress(ip);
+  return address !== null && trusted.some((p) => contains(p, address));
+}
+
 export function clientIP(
   peer: string,
   forwardedFor: string[],

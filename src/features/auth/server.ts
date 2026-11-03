@@ -1,11 +1,15 @@
 import "server-only";
+import { randomUUIDv7 } from "node:crypto";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import { cache } from "react";
+import { withRequestId } from "./server/log";
 import {
   authService,
   clearSessionCookie,
   clientSource,
+  fromTrustedProxy,
   sessionToken,
   takeRateLimit,
 } from "./server/runtime";
@@ -44,21 +48,43 @@ export async function requireSession(): Promise<Viewer> {
   );
 }
 
+// The header that carries the request's id: from Caddy to proxy.ts, from proxy.ts to rendering and actions, and back
+// to the client as X-Request-ID.
+export const REQUEST_ID_HEADER = "x-request-id";
+
+// A request id a proxy may set: it goes into log lines and a response header (Go middleware.go validRequestID).
+const VALID_REQUEST_ID = /^[A-Za-z0-9-]{1,64}$/;
+
+// For proxy.ts, once per request (Go middleware.go withRequestInfo): the id a trusted proxy sent, when well formed,
+// or a new UUIDv7.
+export function requestIdFor(headers: Headers): string {
+  const sent = headers.get(REQUEST_ID_HEADER);
+  return sent && VALID_REQUEST_ID.test(sent) && fromTrustedProxy(headers)
+    ? sent
+    : randomUUIDv7();
+}
+
+// Runs an action with its request's id (set by proxy.ts) on every security event it logs.
+async function inRequest<T>(run: () => Promise<T>): Promise<T> {
+  return withRequestId((await headers()).get(REQUEST_ID_HEADER), run);
+}
+
 // A Server Action that needs a signed-in user. The session is checked before the action reads its arguments, so an
 // unauthenticated caller learns nothing from validation (Go TestUnauthenticatedBeforeValidation), and a dead cookie
 // is cleared on the way out (Go TestInvalidSessionCookieCleared).
 export function authedAction<Args extends unknown[], Result>(
   action: (viewer: Viewer, ...args: Args) => Promise<Result>,
 ): (...args: Args) => Promise<Result | Unauthenticated> {
-  return async (...args) => {
-    const token = await sessionToken();
-    const viewer = await authService().authenticate(token);
-    if (!viewer) {
-      if (token) await clearSessionCookie();
-      return { ok: false, code: "unauthenticated" };
-    }
-    return action(viewer, ...args);
-  };
+  return (...args) =>
+    inRequest(async () => {
+      const token = await sessionToken();
+      const viewer = await authService().authenticate(token);
+      if (!viewer) {
+        if (token) await clearSessionCookie();
+        return { ok: false, code: "unauthenticated" };
+      }
+      return action(viewer, ...args);
+    });
 }
 
 export type Client = {
@@ -73,18 +99,19 @@ export type Client = {
 export function publicAction<Args extends unknown[], Result>(
   action: (client: Client, ...args: Args) => Promise<Result>,
 ): (...args: Args) => Promise<Result | RateLimited> {
-  return async (...args) => {
-    const source = await clientSource();
-    const wait = takeRateLimit(source);
-    if (wait > 0) {
-      return {
-        ok: false,
-        code: "rate_limited",
-        retryAfterSeconds: Math.ceil(wait / 1000),
-      };
-    }
-    return action({ source, token: await sessionToken() }, ...args);
-  };
+  return (...args) =>
+    inRequest(async () => {
+      const source = await clientSource();
+      const wait = takeRateLimit(source);
+      if (wait > 0) {
+        return {
+          ok: false,
+          code: "rate_limited",
+          retryAfterSeconds: Math.ceil(wait / 1000),
+        };
+      }
+      return action({ source, token: await sessionToken() }, ...args);
+    });
 }
 
 // The viewer's live sessions, newest first, for the settings page.

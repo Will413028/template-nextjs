@@ -10,6 +10,7 @@ import {
   signUpInput,
 } from "../credentials";
 import { sessions, users } from "../schema";
+import { type SecurityLog, securityLog } from "./log";
 import {
   createHasher,
   isCommonPassword,
@@ -61,16 +62,6 @@ type Failure<Code extends string> = {
 };
 export type Result<T, Code extends string> = ({ ok: true } & T) | Failure<Code>;
 
-// One line of JSON per security event (ADR account-abuse-and-lifecycle D2b). Never pass a password, a token or a
-// submitted username that matched no account: it can be a password typed into the wrong field.
-type SecurityLog = (event: string, fields: Record<string, string>) => void;
-
-const stdoutLog: SecurityLog = (event, fields) => {
-  console.info(
-    JSON.stringify({ time: new Date().toISOString(), event, ...fields }),
-  );
-};
-
 export type AuthServiceOptions = {
   db: Database;
   now?: Clock;
@@ -97,7 +88,7 @@ export function createAuthService(options: AuthServiceOptions) {
   const db = options.db;
   const now = options.now ?? Date.now;
   const hasher = options.hasher ?? createHasher();
-  const log = options.log ?? stdoutLog;
+  const log = options.log ?? securityLog;
   const throttle =
     options.throttle ??
     new SignInThrottle(now, {

@@ -23,6 +23,8 @@ export function actionIds(nextDir = ".next"): Record<string, string> {
 export type ActionResponse = {
   status: number;
   setCookie: string[];
+  // the X-Request-ID the response carries: the id its log lines have
+  requestId: string | null;
   result: unknown;
 };
 
@@ -51,6 +53,7 @@ export async function callAction(options: {
   return {
     status: response.status,
     setCookie: response.headers.getSetCookie(),
+    requestId: response.headers.get("x-request-id"),
     result: decodeResult(raw),
   };
 }

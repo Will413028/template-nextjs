@@ -11,5 +11,8 @@
 		# Holds requests while the app restarts (compose rebuild) instead of failing them; a single upstream needs
 		# no health_uri.
 		lb_try_duration 10s
+		# The app believes the request id this proxy sends (TRUSTED_PROXIES), so never pass on the client's. The app
+		# returns it as X-Request-ID, which the access log records with the response headers.
+		header_up X-Request-ID {http.request.uuid}
 	}
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import createMiddleware from "next-intl/middleware";
+import { REQUEST_ID_HEADER, requestIdFor } from "@/features/auth/server";
 import { routing } from "@/i18n/routing";
 import { isDevelopment } from "@/lib/env";
 
@@ -46,19 +47,32 @@ export function crossOrigin(request: Request): boolean {
 // The paths next-intl routes and the CSP covers: pages, not /api, /_next or files.
 const PAGE = /^\/(?!api(?:\/|$)|_next(?:\/|$)|.*\..*)/;
 
-// Proxy (Next.js 16's name for middleware, Node.js runtime): cross-origin protection on every path, then locale
-// routing and a fresh CSP nonce for pages.
+// Proxy (Next.js 16's name for middleware, Node.js runtime): the request's id, cross-origin protection on every path,
+// then locale routing and a fresh CSP nonce for pages. Every response says its request id in X-Request-ID.
 export default function proxy(request: NextRequest) {
+  const requestId = requestIdFor(request.headers);
+  const response = route(request, requestId);
+  response.headers.set("X-Request-ID", requestId);
+  return response;
+}
+
+function route(request: NextRequest, requestId: string): NextResponse {
   if (crossOrigin(request)) {
     return new NextResponse("cross-origin request", { status: 403 });
   }
-  if (!PAGE.test(request.nextUrl.pathname)) return NextResponse.next();
+  // rendering, Route Handlers and Server Actions read the id from here; a client's own value is replaced
+  const headers = new Headers(request.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
+  if (!PAGE.test(request.nextUrl.pathname)) {
+    return NextResponse.next({ request: { headers } });
+  }
 
   // next dev needs eval and its own inline scripts; the policy is for builds.
-  if (isDevelopment()) return intlMiddleware(request);
+  if (isDevelopment()) {
+    return intlMiddleware(new NextRequest(request, { headers }));
+  }
 
   const csp = cspFor(btoa(crypto.randomUUID()));
-  const headers = new Headers(request.headers);
   headers.set("Content-Security-Policy", csp);
   const response = intlMiddleware(new NextRequest(request, { headers }));
   response.headers.set("Content-Security-Policy", csp);

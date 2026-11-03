@@ -2,7 +2,13 @@ import "server-only";
 import { cookies, headers } from "next/headers";
 import { db } from "@/server/db";
 import { authConfig } from "@/server/env";
-import { clientIP, limitKey, type Prefix, parsePrefix } from "./client-ip";
+import {
+  clientIP,
+  isTrusted,
+  limitKey,
+  type Prefix,
+  parsePrefix,
+} from "./client-ip";
 import { createAuthService } from "./service";
 import { IPLimiter } from "./throttle";
 
@@ -26,11 +32,24 @@ type Runtime = {
 
 const KEY = Symbol.for("features.auth.runtime");
 const store = globalThis as unknown as Record<symbol, Runtime | undefined>;
+const TRUSTED_KEY = Symbol.for("features.auth.trustedProxies");
+const trustedStore = globalThis as unknown as Record<
+  symbol,
+  Prefix[] | undefined
+>;
+
+// TRUSTED_PROXIES, parsed once. Kept apart from the runtime: proxy.ts asks for it on requests that carry an
+// X-Request-ID (requestIdFor in server.ts), and making the service there would start its pool, its dummy hash and its
+// cleanup timer for requests that may never sign anyone in.
+function trustedProxies(): Prefix[] {
+  trustedStore[TRUSTED_KEY] ??= authConfig().trustedProxies.map(parsePrefix);
+  return trustedStore[TRUSTED_KEY];
+}
 
 function create(): Runtime {
   // Configuration first: a bad value throws before anything starts, so a retry leaves nothing behind.
   const config = authConfig();
-  const trusted = config.trustedProxies.map(parsePrefix);
+  const trusted = trustedProxies();
   const limiter = new IPLimiter(config.rateLimitPerMinute, Date.now);
   const service = createAuthService({ db: db() });
   // Expired sessions and day-old sign-in counts; unref, so the timer never keeps the process up.
@@ -70,6 +89,12 @@ export async function clientSource(): Promise<string> {
     );
   }
   return limitKey(ip);
+}
+
+// Whether the TCP peer the preload recorded is a trusted proxy.
+export function fromTrustedProxy(headers: Headers): boolean {
+  const peer = headers.get(PEER_HEADER);
+  return peer !== null && isTrusted(peer, trustedProxies());
 }
 
 // 0 when the request may go ahead, else the milliseconds until it may.
