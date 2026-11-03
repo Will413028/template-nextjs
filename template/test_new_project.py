@@ -64,7 +64,8 @@ class GenerateTest(unittest.TestCase):
         self.root = pathlib.Path(self.tmp.name)
         self.env = mock.patch.dict(os.environ, GIT_ENV)
         self.env.start()
-        self.old_umask = os.umask(0o022)
+        # 027, not the usual 022: the data filter alone already drops group and other write bits
+        self.old_umask = os.umask(0o027)
 
     def tearDown(self):
         self.env.stop()
@@ -106,8 +107,8 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual(git(dest, "rev-list", "--count", "HEAD").strip(), "1")
         # one branch; the branch model is set up on the hosting side after the first push
         self.assertEqual(git(dest, "branch", "--format=%(refname:short)").split(), ["main"])
-        self.assertEqual(oct(dest.stat().st_mode & 0o777), oct(0o755))
-        self.assertEqual(oct((dest / "package.json").stat().st_mode & 0o777), oct(0o644))
+        self.assertEqual(oct(dest.stat().st_mode & 0o777), oct(0o750))
+        self.assertEqual(oct((dest / "package.json").stat().st_mode & 0o777), oct(0o640))
         self.assertEqual(git(dest, "remote").strip(), "")
         self.assertEqual(git(dest, "status", "--porcelain"), "")
         sha = git(src, "rev-parse", "HEAD").strip()
