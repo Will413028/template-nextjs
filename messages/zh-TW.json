@@ -15,5 +15,20 @@
   "notFound": {
     "title": "找不到頁面",
     "goHome": "回到首頁"
+  },
+  "auth": {
+    "username": "使用者名稱",
+    "password": "密碼",
+    "signIn": "登入",
+    "signUp": "註冊",
+    "signOut": "登出",
+    "signOutEverywhere": "登出所有裝置",
+    "revokeSession": "登出這個裝置",
+    "deleteAccount": "刪除帳號",
+    "signedInAs": "已登入：{username}",
+    "settings": "設定",
+    "sessions": "登入中的裝置",
+    "lastUsed": "最後使用 {at}",
+    "thisDevice": "這個裝置"
   }
 }

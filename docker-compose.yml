@@ -70,6 +70,9 @@ services:
       DATABASE_PASSWORD_FILE: /run/secrets/db_app_password
       DB_MAX_CONNS: ${DB_MAX_CONNS:-}
       DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-}
+      # caddy's fixed address: only it may set X-Forwarded-For (ADR api-and-auth D1)
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.29.0.2/32}
+      AUTH_RATE_LIMIT_PER_MIN: ${AUTH_RATE_LIMIT_PER_MIN:-}
     secrets: [db_app_password]
     depends_on:
       migrate:
@@ -96,9 +99,23 @@ services:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    networks:
+      default:
+        # outside ip_range, so no other container can take it; TRUSTED_PROXIES names it
+        ipv4_address: 172.29.0.2
     depends_on:
       app:
         condition: service_healthy
+
+# A fixed subnet, so caddy can have a fixed address. Not template-go-nextjs's 172.30.0.0/24: both stacks can run on
+# one machine.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
+          # containers without a fixed address get one from here
+          ip_range: 172.29.0.128/25
 
 secrets:
   postgres_password:

@@ -54,6 +54,10 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Records each request's TCP peer before Next.js runs (peer.cjs; plan D2 deviation 3); the app refuses sign-up and
+# sign-in without it.
+COPY --from=builder /app/peer.cjs ./peer.cjs
+ENV NODE_OPTIONS="--require=/app/peer.cjs"
 
 # nextjs:nodejs, by number so a runtime can verify it is not root without reading /etc/passwd
 USER 1001:1001

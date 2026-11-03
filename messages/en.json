@@ -15,5 +15,20 @@
   "notFound": {
     "title": "Page not found",
     "goHome": "Go home"
+  },
+  "auth": {
+    "username": "Username",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signUp": "Sign up",
+    "signOut": "Sign out",
+    "signOutEverywhere": "Sign out everywhere",
+    "revokeSession": "Sign out this session",
+    "deleteAccount": "Delete account",
+    "signedInAs": "Signed in as {username}",
+    "settings": "Settings",
+    "sessions": "Signed-in devices",
+    "lastUsed": "Last used {at}",
+    "thisDevice": "this device"
   }
 }
