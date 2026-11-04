@@ -1,26 +1,17 @@
 import "server-only";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
+import { limitKey } from "@/server/client-ip";
 import { db } from "@/server/db";
 import { authConfig } from "@/server/env";
-import {
-  clientIP,
-  isTrusted,
-  limitKey,
-  type Prefix,
-  parsePrefix,
-} from "./client-ip";
+import { requestClientIP, trustedProxies } from "@/server/request";
 import { createAuthService } from "./service";
 import { IPLimiter } from "./throttle";
 
-// The process's auth state: the service, the per-IP limiter and the trusted proxies, made on first use so that
+// The process's auth state: the service and the per-IP limiter, made on first use so that
 // `next build` reads no configuration and opens no connection. Kept on globalThis: Next.js may bundle this module
 // into more than one server chunk, and two copies would each keep their own limits.
 
 const SESSION_COOKIE = "__Host-session";
-
-// Written by peer.cjs, the preload that records the TCP peer before Next.js runs (plan D2 deviation 3); it overwrites
-// any value a client sends. peer.test.ts checks the two names match.
-export const PEER_HEADER = "x-peer-address";
 
 const HOUR = 60 * 60_000;
 
@@ -31,20 +22,6 @@ type Runtime = {
 
 const KEY = Symbol.for("features.auth.runtime");
 const store = globalThis as unknown as Record<symbol, Runtime | undefined>;
-const TRUSTED_KEY = Symbol.for("features.auth.trustedProxies");
-const trustedStore = globalThis as unknown as Record<
-  symbol,
-  Prefix[] | undefined
->;
-
-// TRUSTED_PROXIES, parsed once (a value that does not parse throws on every call). Kept apart from the runtime:
-// proxy.ts asks for it on every request (requestIdFor in server.ts), and making the service there would start its
-// pool, its dummy hash and its cleanup timer for requests that may never sign anyone in.
-function trustedProxies(): Prefix[] {
-  trustedStore[TRUSTED_KEY] ??= authConfig().trustedProxies.map(parsePrefix);
-  return trustedStore[TRUSTED_KEY];
-}
-
 function create(): Runtime {
   // Configuration first: a bad value throws before anything starts, so a retry leaves nothing behind.
   const config = authConfig();
@@ -70,31 +47,10 @@ function runtime(): Runtime {
 
 export const authService = () => runtime().service;
 
-// The client's limitKey: the TCP peer, or behind a trusted proxy the address it forwarded (client-ip.ts).
-// An action posted to a page that does not bundle it is forwarded by Next.js to itself over loopback, so its peer is
-// 127.0.0.1: such requests share one key, which only limits them harder. Never list loopback in TRUSTED_PROXIES, or
-// a forwarded request's X-Forwarded-For would be believed with the real peer gone. The app's own forms post to the
-// page that bundles the action and are never forwarded.
+// The client's limitKey (src/server/request.ts): actions Next.js forwards to itself over loopback share one key,
+// which only limits them harder.
 export async function clientSource(): Promise<string> {
-  const h = await headers();
-  const peer = h.get(PEER_HEADER);
-  const ip = peer
-    ? clientIP(peer, [h.get("x-forwarded-for") ?? ""], trustedProxies())
-    : null;
-  if (!ip) {
-    // without the preload every client would share one key, or pick its own through X-Forwarded-For
-    throw new Error(
-      `${PEER_HEADER} is missing: start Node.js with --require ./peer.cjs`,
-    );
-  }
-  return limitKey(ip);
-}
-
-// Whether the TCP peer the preload recorded is a trusted proxy.
-export function fromTrustedProxy(headers: Headers): boolean {
-  const trusted = trustedProxies();
-  const peer = headers.get(PEER_HEADER);
-  return peer !== null && isTrusted(peer, trusted);
+  return limitKey(await requestClientIP());
 }
 
 // 0 when the request may go ahead, else the milliseconds until it may.

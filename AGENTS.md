@@ -37,7 +37,7 @@ This repository is a template: `make new NAME=x DEST=<dir>` generates a project 
 ├── src/
 │   ├── app/                  # routes: [locale]/ pages, api/health and api/session/expired (the only Route Handlers)
 │   ├── features/<name>/      # vertical slices: schema.ts, server/, actions.ts, components/
-│   ├── server/               # kernel: db.ts (app-role pool), env.ts (server configuration)
+│   ├── server/               # kernel: db.ts (app-role pool), env.ts (server configuration), request.ts (client IP, request id), log.ts
 │   ├── lib/                  # client-safe utilities (env.ts: NODE_ENV only)
 │   ├── i18n/                 # next-intl routing, request config, navigation
 │   └── proxy.ts              # locale routing + per-request CSP nonce

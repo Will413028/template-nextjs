@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import createMiddleware from "next-intl/middleware";
-import { requestIdFor } from "@/features/auth/server";
 import { routing } from "@/i18n/routing";
 import { isDevelopment } from "@/lib/env";
 import { REQUEST_ID_HEADER } from "@/lib/request-id";
+import { requestIdFor } from "@/server/request";
 
 const intlMiddleware = createMiddleware(routing);
 

@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, lte, or } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "@/server/db";
+import { type SecurityLog, securityLog } from "@/server/log";
 import {
   type FieldErrors,
   fieldErrors,
@@ -10,7 +11,6 @@ import {
   signUpInput,
 } from "../credentials";
 import { sessions, users } from "../schema";
-import { type SecurityLog, securityLog } from "./log";
 import {
   createHasher,
   isCommonPassword,
@@ -206,7 +206,7 @@ export function createAuthService(options: AuthServiceOptions) {
 
     // Checks the username and password and issues a new session; previousToken, the session the request carried,
     // is deleted, so a sign-in never keeps an old token valid (session fixation). The answer does not tell an
-    // unknown username from a wrong password. source is the client's limitKey (client-ip.ts).
+    // unknown username from a wrong password. source is the client's limitKey (src/server/client-ip.ts).
     async signIn(
       input: unknown,
       client: { source: string; previousToken?: string },

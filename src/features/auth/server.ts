@@ -1,16 +1,14 @@
 import "server-only";
-import { randomUUIDv7 } from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import { cache } from "react";
 import { REQUEST_ID_HEADER } from "@/lib/request-id";
-import { withRequestId } from "./server/log";
+import { withRequestId } from "@/server/log";
 import {
   authService,
   clearSessionCookie,
   clientSource,
-  fromTrustedProxy,
   sessionToken,
   takeRateLimit,
 } from "./server/runtime";
@@ -47,20 +45,6 @@ export async function requireSession(): Promise<Viewer> {
       ? `/api/session/expired?locale=${encodeURIComponent(locale)}`
       : `/${locale}/sign-in`,
   );
-}
-
-// A request id a proxy may set: it goes into log lines and a response header (Go middleware.go validRequestID).
-const VALID_REQUEST_ID = /^[A-Za-z0-9-]{1,64}$/;
-
-// For proxy.ts, once per request (Go middleware.go withRequestInfo): the id a trusted proxy sent, when well formed,
-// or a new UUIDv7. TRUSTED_PROXIES is read on every request, an id or not: a value that does not parse fails every
-// response, the health check's included, where Go refuses to start. An action Next.js forwards to itself over
-// loopback (runtime.ts clientSource) gets a new id here, so its log lines do not carry the id its client received;
-// the app's own forms are never forwarded.
-export function requestIdFor(headers: Headers): string {
-  const trusted = fromTrustedProxy(headers);
-  const sent = headers.get(REQUEST_ID_HEADER);
-  return trusted && sent && VALID_REQUEST_ID.test(sent) ? sent : randomUUIDv7();
 }
 
 // Runs an action with its request's id (set by proxy.ts) on every security event it logs.
