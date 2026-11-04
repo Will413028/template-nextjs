@@ -72,9 +72,12 @@ export const revokeSession = authedAction(
   },
 );
 
-// Needs a session issued within ten minutes (the service checks); everything the account owns goes with it.
+// Needs a session issued within ten minutes (the service checks); everything the account owns goes with it. A session
+// that ended between authedAction's check and the delete leaves a cookie that names nothing: cleared too.
 export const deleteAccount = authedAction(async (viewer) => {
   const result = await authService().deleteAccount(viewer);
-  if (result.ok) await clearSessionCookie();
+  if (result.ok || result.code === "session_invalid") {
+    await clearSessionCookie();
+  }
   return result;
 });

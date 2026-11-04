@@ -91,7 +91,7 @@ function Field({
         className="input"
       />
       {error ? (
-        <p id={`${name}-error`} className="text-danger text-sm">
+        <p id={`${name}-error`} role="alert" className="text-danger text-sm">
           {fieldMessage(error)}
         </p>
       ) : (

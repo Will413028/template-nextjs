@@ -18,7 +18,16 @@ const store = globalThis as unknown as Record<symbol, Prefix[] | undefined>;
 
 // TRUSTED_PROXIES, parsed once (a value that does not parse throws on every call).
 export function trustedProxies(): Prefix[] {
-  store[KEY] ??= trustedProxyConfig().map(parsePrefix);
+  store[KEY] ??= trustedProxyConfig().map((prefix) => {
+    try {
+      return parsePrefix(prefix);
+    } catch (error) {
+      // the setting's name in the message, so a failed start says which value to fix
+      throw new Error(`TRUSTED_PROXIES: ${(error as Error).message}`, {
+        cause: error,
+      });
+    }
+  });
   return store[KEY];
 }
 

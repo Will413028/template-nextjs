@@ -42,22 +42,20 @@ export function actionId(ids: Record<string, string>, name: string): string {
 
 // For each action ("<file>#<export>"), the path of a page whose bundle holds it. React posts an action to the page it
 // was rendered on, which always bundles it; posted to a page that does not, Next.js forwards the request to one that
-// does, and the response no longer carries the action's result (CI run 41673946563: undefined, next 16.4.3).
-export function actionPages(nextDir = ".next"): Record<string, string> {
+// does, and the response no longer carries the action's result (CI run 41673946563: undefined, next 16.4.3). An action
+// only a page with a dynamic segment bundles has no page: the test that posts it fails, not every test in the file.
+// A lookup, not a record, so no caller can index past the check.
+export function actionPages(nextDir = ".next"): (action: string) => string {
   const manifest = JSON.parse(
     readFileSync(`${nextDir}/server/server-reference-manifest.json`, "utf8"),
   ) as Manifest;
-  return Object.fromEntries(
-    Object.values(manifest.node).map((entry) => {
+  const pages: Record<string, string> = Object.fromEntries(
+    Object.values(manifest.node).flatMap((entry) => {
       // a page with no dynamic segment but the locale: "app/[locale]/(app)/items/page" is /en/items
       const worker = Object.keys(entry.workers ?? {}).find(
         (page) => !page.replaceAll("[locale]", "").includes("["),
       );
-      if (!worker) {
-        throw new Error(
-          `no page bundles ${entry.filename}#${entry.exportedName}`,
-        );
-      }
+      if (!worker) return [];
       const path = worker
         .replace(/^app\//, "")
         .replace(/\/page$/, "")
@@ -65,9 +63,16 @@ export function actionPages(nextDir = ".next"): Record<string, string> {
         .filter((segment) => !/^\(.+\)$/.test(segment))
         .map((segment) => (segment === "[locale]" ? "en" : segment))
         .join("/");
-      return [`${entry.filename}#${entry.exportedName}`, `/${path}`];
+      return [[`${entry.filename}#${entry.exportedName}`, `/${path}`]];
     }),
   );
+  return (action) => {
+    const page = pages[action];
+    if (!page) {
+      throw new Error(`no page without a dynamic segment bundles ${action}`);
+    }
+    return page;
+  };
 }
 
 export type ActionResponse = {

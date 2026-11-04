@@ -1,54 +1,67 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { createItem, updateItem } from "../actions";
 import type { FieldCode } from "../input";
 import { useFailureMessage, useFieldMessage } from "./use-failure-message";
 
 type State = Awaited<ReturnType<typeof createItem | typeof updateItem>> | null;
+type Sent = { title: string; description: string };
 
 type Editing = { id: string; title: string; description: string | null };
 
 // Adds an item, or, given one, changes it. After adding, the list reloads and React empties the form; after a change,
 // the list opens. What the action says is wrong shows next to the field it names, or above the button, and the
-// fields keep what was sent: React resets them to their defaults after the action, so a refused form's defaults are
-// what it sent (actions.ts keepSent), and a successful add's are empty. Either order of React's reset and its new
-// defaults ends there: a field reset and not typed in since shows its default as it changes (HTML's dirty flag). The
-// defaults are always strings, so a textarea's is never left behind.
+// fields keep what was sent: React resets them to their defaults after the action, so a failed form's defaults are
+// what it sent, kept here in the browser as it submits rather than sent back by the action (the form's action stays the
+// Server Action, so it posts before the page's scripts load), and a successful add's are empty. Either
+// order of React's reset and its new defaults ends there: a field reset and not typed in since shows its default as it
+// changes (HTML's dirty flag). The defaults are always strings, so a textarea's is never left behind.
 export function ItemForm({ item }: { item?: Editing }) {
   const t = useTranslations("items");
   const failureMessage = useFailureMessage();
   const router = useRouter();
   const editing = item !== undefined;
-  const [state, action, pending] = useActionState<State, FormData>(
+  const [result, action, pending] = useActionState<State, FormData>(
     editing ? updateItem : createItem,
     null,
   );
+  const [sent, setSent] = useState<Sent | null>(null);
   useEffect(() => {
-    if (!state) return;
-    if (state.ok) {
+    if (!result) return;
+    if (result.ok) {
       if (editing) router.push("/items");
       else router.refresh();
-    } else if (state.code === "unauthenticated") {
+    } else if (result.code === "unauthenticated") {
       router.push("/sign-in");
     }
-  }, [state, editing, router]);
+  }, [result, editing, router]);
 
-  const failure = state && !state.ok ? state : null;
+  const failure = result && !result.ok ? result : null;
   const fields = failure && "fields" in failure ? failure.fields : undefined;
   const shownByField = Boolean(fields?.title || fields?.description);
-  const sent = failure && "sent" in failure ? failure.sent : undefined;
+  const kept = failure ? sent : null;
 
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <form
+      action={action}
+      onSubmit={(event) => {
+        const form = new FormData(event.currentTarget);
+        setSent({
+          title: text(form.get("title")),
+          description: text(form.get("description")),
+        });
+      }}
+      className="flex flex-col gap-4"
+    >
       {item && <input type="hidden" name="id" value={item.id} />}
       <Field
         name="title"
         label={t("titleLabel")}
         error={fields?.title}
-        defaultValue={sent?.title ?? item?.title ?? ""}
+        defaultValue={kept?.title ?? item?.title ?? ""}
         required
       />
       <Field
@@ -56,7 +69,7 @@ export function ItemForm({ item }: { item?: Editing }) {
         label={t("descriptionLabel")}
         hint={t("descriptionHint")}
         error={fields?.description}
-        defaultValue={sent?.description ?? item?.description ?? ""}
+        defaultValue={kept?.description ?? item?.description ?? ""}
         multiline
       />
       {failure && !shownByField && (
@@ -74,6 +87,9 @@ export function ItemForm({ item }: { item?: Editing }) {
     </form>
   );
 }
+
+const text = (value: FormDataEntryValue | null) =>
+  typeof value === "string" ? value : "";
 
 function Field({
   name,

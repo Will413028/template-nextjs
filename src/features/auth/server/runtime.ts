@@ -25,6 +25,8 @@ const store = globalThis as unknown as Record<symbol, Runtime | undefined>;
 function create(): Runtime {
   // Configuration first: a bad value throws before anything starts, so a retry leaves nothing behind.
   const config = authConfig();
+  // not used here: read so a bad TRUSTED_PROXIES fails before the timer starts too where register() did not run first
+  // (instrumentation.ts), such as a test that imports this module
   trustedProxies();
   const limiter = new IPLimiter(config.rateLimitPerMinute, Date.now);
   const service = createAuthService({ db: db() });

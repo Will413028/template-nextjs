@@ -63,7 +63,7 @@ afterAll(async () => {
 });
 
 const ids = actionIds();
-const pages = actionPages();
+const pageOf = actionPages();
 const id = (name: string) => {
   const found = ids[`src/features/auth/actions.ts#${name}`];
   if (!found) throw new Error(`no action ${name} in the build`);
@@ -140,7 +140,7 @@ describe("every Server Action in the build", () => {
       const response = await callAction({
         base: main.base,
         id: actionId,
-        path: pages[action],
+        path: pageOf(action),
         args: [null, { id: "00000000-0000-7000-8000-000000000000" }],
         headers: from(address()),
       });

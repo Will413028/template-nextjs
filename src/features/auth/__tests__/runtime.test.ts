@@ -17,7 +17,9 @@ afterEach(() => {
 describe("auth runtime", () => {
   it("refuses a bad TRUSTED_PROXIES before it starts the cleanup timer", () => {
     const timers = vi.spyOn(globalThis, "setInterval");
-    expect(() => authService()).toThrow("not an address prefix: 172.29.0.2");
+    expect(() => authService()).toThrow(
+      "TRUSTED_PROXIES: not an address prefix: 172.29.0.2",
+    );
     expect(() => authService()).toThrow("not an address prefix");
     expect(timers).not.toHaveBeenCalled();
   });

@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { parseNewItem, TITLE_MAX } from "../input";
+import { parseNewItem } from "../input";
+import { TITLE_MAX } from "../limits";
 import { decodeCursor, encodeCursor } from "../server/cursor";
 
 // Rules checked over many generated inputs, not a few chosen ones (fast-check prints the failing input and a seed).

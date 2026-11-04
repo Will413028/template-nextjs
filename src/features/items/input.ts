@@ -1,11 +1,11 @@
 import { z } from "zod";
+import { TITLE_MAX } from "./limits";
 
 // The item input rules, the one source for the forms and the queries (plan D2 deviation 9: zod instead of OpenAPI),
 // ported from template-go-nextjs api/openapi.yaml at 560106d (ItemTitle, CreateItemRequest, ItemPatch, Limit,
 // Cursor). Titles count code points; items_title_check in schema.ts is the database's copy of the title rule. A
 // description has no limit of its own, as in Go: the Server Action body limit bounds it.
 
-export const TITLE_MAX = 200;
 // Items per page when the caller names no limit, and the most it may name.
 export const PAGE_SIZE = 20;
 const PAGE_SIZE_MAX = 100;
@@ -33,8 +33,11 @@ const typeError = (issue: { input?: unknown }): FieldCode =>
       ? "null_not_allowed"
       : "invalid";
 
-// PostgreSQL text cannot hold U+0000: refused here, or the insert would throw instead of naming the field.
-const storable = (s: string) => !s.includes("\u0000");
+// PostgreSQL text cannot hold U+0000: refused here, or the insert would throw instead of naming the field. A lone UTF-16
+// surrogate is refused too: encoding it as UTF-8 for the database would store U+FFFD in its place.
+const LONE_SURROGATE = /\p{Surrogate}/u;
+const storable = (s: string) =>
+  !s.includes("\u0000") && !LONE_SURROGATE.test(s);
 
 const title = z
   .string({ error: typeError })

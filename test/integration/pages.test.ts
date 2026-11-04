@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { encodeCursor } from "@/features/items/server/cursor";
 import en from "../../messages/en.json";
 import zhTW from "../../messages/zh-TW.json";
 import { actionId, actionIds, callAction } from "./action-client";
@@ -11,6 +12,9 @@ import {
   startDatabase,
   type TestDatabase,
 } from "./postgres";
+
+// A message's text as a pattern that matches only that text.
+const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // The pages against the production build (`next start` with the peer preload) and PostgreSQL as the app role.
 
@@ -121,7 +125,10 @@ describe("a TRUSTED_PROXIES that does not parse", () => {
     );
     try {
       expect((await fetch(`${broken.base}/en`)).status).toBe(500);
-      expect(broken.logs.join("")).toContain("not an address prefix");
+      // the cause, not only a 500: the same env with an empty TRUSTED_PROXIES is the healthy server the other tests use
+      expect(broken.logs.join("")).toContain(
+        "TRUSTED_PROXIES: not an address prefix: not-an-ip",
+      );
     } finally {
       await broken.stop();
     }
@@ -213,8 +220,17 @@ describe("the items pages", () => {
     expect(still.html).toContain(title);
   });
 
-  // React resets a form's fields after its action: a refused form gets back what it sent, to show it again
-  it("give a refused form back what it sent, and change nothing", async () => {
+  // A form whose action is a Server Action posts before the scripts load; a client function would render a
+  // javascript: action the CSP blocks, and the form would do nothing
+  it("render the add form posted to the server, not a script", async () => {
+    const user = await signedIn();
+    const { html } = await user.get("/en/items");
+    expect(html).toMatch(/<form[^>]*method="POST"/);
+    expect(html).not.toMatch(/<form[^>]*action="javascript:/);
+  });
+
+  // The form keeps what it sent in the browser (item-form.tsx): a refused action returns only what was wrong
+  it("refuse a form without sending its fields back, and change nothing", async () => {
     const user = await signedIn();
     const long = "a".repeat(201);
     expect(
@@ -227,7 +243,6 @@ describe("the items pages", () => {
       ok: false,
       code: "invalid_input",
       fields: { title: "too_long" },
-      sent: { title: long, description: "kept" },
     });
     const id = createdId(
       await user.submit(
@@ -242,10 +257,10 @@ describe("the items pages", () => {
         { id, title: long, description: "changed" },
         `/en/items/${id}`,
       ),
-    ).toMatchObject({
+    ).toEqual({
       ok: false,
       code: "invalid_input",
-      sent: { title: long, description: "changed" },
+      fields: { title: "too_long" },
     });
     const list = await user.get("/en/items");
     expect(list.html).toContain("saved");
@@ -279,9 +294,9 @@ describe("the items pages", () => {
     expect(first.html).not.toContain("item-00");
     // matched as elements: the client gets the whole catalog, so a bare message text is on every page
     const firstPageLink = new RegExp(
-      `<a[^>]*href="/en/items"[^>]*>${en.items.firstPage}</a>`,
+      `<a[^>]*href="/en/items"[^>]*>${literal(en.items.firstPage)}</a>`,
     );
-    const addForm = new RegExp(`>${en.items.newItem}</h2>`);
+    const addForm = new RegExp(`>${literal(en.items.newItem)}</h2>`);
     expect(first.html).toMatch(addForm);
     expect(first.html).not.toMatch(firstPageLink);
     const next = /href="(\/en\/items\?cursor=[A-Za-z0-9_-]+)"/.exec(
@@ -295,6 +310,13 @@ describe("the items pages", () => {
     // the link back to the newest, and no form to add one where it would not show
     expect(second.html).toMatch(firstPageLink);
     expect(second.html).not.toMatch(addForm);
+    // past the oldest: no items, and the page says there are no older ones
+    const oldest = /href="\/en\/items\/([0-9a-f-]{36})"/.exec(second.html)?.[1];
+    if (!oldest) throw new Error("no item link on the second page");
+    const past = await user.get(`/en/items?cursor=${encodeCursor(oldest)}`);
+    expect(past.status).toBe(200);
+    expect(past.html).toContain(`>${en.items.noOlder}</p>`);
+    expect(past.html).not.toContain(`>${en.items.empty}</p>`);
   });
 
   it("sends a visitor without a session to sign in", async () => {

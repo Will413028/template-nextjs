@@ -24,7 +24,9 @@ export type NextServer = {
   stop: () => Promise<void>;
 };
 
-// Ready once ready() accepts the health check's response: by default when it is 2xx, that is, the database is up.
+// Ready once ready() accepts the health check's response: by default when it is 2xx, that is, the database is up. Five 500s
+// in a row that ready() refuses (a second) fail the start: a broken configuration answers 500 to every request and
+// does not go away by waiting, while one 500 as the server starts does (a 503, the database not up yet, is retried).
 export async function startNext(
   env: Record<string, string>,
   ready: (health: Response) => boolean = (health) => health.ok,
@@ -54,12 +56,16 @@ export async function startNext(
       child.once("exit", () => resolve());
       child.kill("SIGTERM");
     });
+  let errors = 0;
   for (let i = 0; i < 300; i++) {
     if (child.exitCode !== null) break;
+    let health: Response | undefined;
     try {
-      if (ready(await fetch(`${base}/api/health`)))
-        return { base, host, logs, stop };
+      health = await fetch(`${base}/api/health`);
     } catch {}
+    if (health && ready(health)) return { base, host, logs, stop };
+    errors = health?.status === 500 ? errors + 1 : 0;
+    if (errors >= 5) break;
     await new Promise((r) => setTimeout(r, 200));
   }
   await stop();

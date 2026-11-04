@@ -46,8 +46,26 @@ describe("a new item", () => {
       { title: "x", description: "a\u0000b" },
       { description: "invalid" },
     ],
+    // UTF-8 cannot encode one: the database would store U+FFFD instead
+    [
+      "a title with a lone surrogate",
+      { title: "a\uD800b" },
+      { title: "invalid" },
+    ],
+    [
+      "a description with a lone surrogate",
+      { title: "x", description: "\uDE00" },
+      { description: "invalid" },
+    ],
   ])("refuses %s", (_, input, fields) => {
     expect(parseNewItem(input)).toEqual({ ok: false, fields });
+  });
+
+  it("keeps a character outside the BMP, a surrogate pair", () => {
+    expect(parseNewItem({ title: "\u{1F600}" })).toEqual({
+      ok: true,
+      value: { title: "\u{1F600}", description: null },
+    });
   });
 
   it("takes a missing or null description as none", () => {
