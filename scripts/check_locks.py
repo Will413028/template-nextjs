@@ -27,6 +27,8 @@ SUPPRESSIONS = {
     ),
     # migrations: squawk's per-statement ignore (an excluded rule belongs in .squawk.toml, a gate file)
     "sql": (re.compile(r"squawk-ignore"), (".sql",)),
+    # the check scripts and the generator: ruff's and the type checkers' inline ignores
+    "python": (re.compile(r"#\s*(?:noqa|ruff:\s*(?:noqa|ignore)|type:\s*ignore|pyright:\s*ignore)"), (".py",)),
 }
 
 

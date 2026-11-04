@@ -20,7 +20,7 @@ def write_secret(path: str) -> bool:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
     except FileExistsError:
         if os.path.getsize(path) == 0:
-            raise SystemExit(f"{path} is empty (an interrupted earlier run?); delete it and run again.")
+            raise SystemExit(f"{path} is empty (an interrupted earlier run?); delete it and run again.") from None
         return False
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(secrets.token_urlsafe(32) + "\n")

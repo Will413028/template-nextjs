@@ -1,4 +1,5 @@
 # Generated files: GitHub collapses them in diffs, and scripts/check_commit_policy.py leaves them out of a commit's
-# size. Their sources (package.json, the Drizzle schema) are counted instead.
+# size. Their sources (package.json, requirements-dev.in, the Drizzle schema) are counted instead.
 **/pnpm-lock.yaml linguist-generated=true
 migrations/meta/** linguist-generated=true
+requirements-dev.txt linguist-generated=true

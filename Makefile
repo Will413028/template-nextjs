@@ -65,6 +65,13 @@ endif
 	@python3 template/new_project.py "$(NAME)" "$(DEST)" $(if $(REPO),--repo "$(REPO)")
 # <<< template-only
 
+# ruff and diff-cover (requirements-dev.txt, pinned with hashes) in .venv, for pnpm lint:py and CI's coverage check.
+# uv when installed, else the standard library's venv and pip.
+.PHONY: py-tools
+py-tools:
+	@if command -v uv > /dev/null; then uv venv -q --allow-existing .venv && uv pip install -q --python .venv/bin/python --require-hashes -r requirements-dev.txt; \
+	else python3 -m venv .venv && .venv/bin/pip install -q --require-hashes -r requirements-dev.txt; fi
+
 .PHONY: init-env
 init-env:
 	@python3 scripts/init_env.py

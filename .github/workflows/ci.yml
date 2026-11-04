@@ -49,10 +49,25 @@ jobs:
           fi
       # lint, dependency rules, migration checks, unit tests, test and suppression locks (scripts/quality-locks.json),
       # production build
+      - run: make py-tools
       - run: pnpm check
       # PostgreSQL in Docker (testcontainers) with the production roles; only CI runs these, never a shared dev machine
       - run: pnpm test:integration
       - run: python3 scripts/check_locks.py --vitest-report test-report.json --integration-report integration-report.json
+      # 80% of the changed lines in the measured files (vitest.config.mts coverage) run in the unit or integration tests;
+      # no whole-project threshold
+      - name: Changed lines are covered
+        env:
+          EVENT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          base="$EVENT_BASE"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then base=HEAD~1; fi
+          if git rev-parse -q --verify "$base^{commit}" > /dev/null; then
+            .venv/bin/diff-cover coverage/unit/cobertura-coverage.xml coverage/integration/cobertura-coverage.xml \
+              --compare-branch "$base" --fail-under 80
+          else
+            echo "base $base is not in this history (a new branch or a force push): no changed lines to measure"
+          fi
 
   # Every commit that edits a checker's configuration or moves a lock the bad way names why in a Quality-Gate trailer
   # (scripts/check_commit_policy.py; lefthook checks it at commit time too).
@@ -117,6 +132,9 @@ jobs:
       - name: Install the generated project
         working-directory: ${{ runner.temp }}/ci-probe
         run: pnpm install --frozen-lockfile
+      - name: Python tools in the generated project
+        working-directory: ${{ runner.temp }}/ci-probe
+        run: make py-tools
       - name: pnpm check in the generated project
         working-directory: ${{ runner.temp }}/ci-probe
         run: pnpm check

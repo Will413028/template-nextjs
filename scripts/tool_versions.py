@@ -33,6 +33,9 @@ TOOLS = {"hadolint": {"repo": "hadolint/hadolint", "version_var": "HADOLINT_VERS
 
 
 def http_get(url: str) -> tuple[int, bytes]:
+    # only https: urlopen would also open file: and custom schemes
+    if not url.startswith("https://"):
+        raise ValueError(f"not an https URL: {url}")
     req = urllib.request.Request(url, headers={"User-Agent": "tool-versions"})
     if url.startswith("https://api.github.com/") and os.environ.get("GITHUB_TOKEN"):
         req.add_header("Authorization", "Bearer " + os.environ["GITHUB_TOKEN"])
@@ -89,7 +92,7 @@ def new_checksums(version: str) -> dict[str, str]:
 
 
 def cmd_check() -> int:
-    cooldown = dt.date.today() - dt.timedelta(days=COOLDOWN_DAYS)
+    cooldown = dt.datetime.now(dt.UTC).date() - dt.timedelta(days=COOLDOWN_DAYS)
     outdated = 0
     for tool, spec in TOOLS.items():
         current = make_var(MAKEFILE.read_text(), spec["version_var"])
@@ -105,7 +108,7 @@ def cmd_check() -> int:
 def cmd_bump(tool: str, version: str | None) -> int:
     spec = TOOLS[tool]
     if version is None:
-        version, _ = github_latest(spec["repo"], dt.date.today() - dt.timedelta(days=COOLDOWN_DAYS))
+        version, _ = github_latest(spec["repo"], dt.datetime.now(dt.UTC).date() - dt.timedelta(days=COOLDOWN_DAYS))
     text = set_make_var(MAKEFILE.read_text(), spec["version_var"], version)
     for var, value in new_checksums(version).items():
         text = set_make_var(text, var, value)

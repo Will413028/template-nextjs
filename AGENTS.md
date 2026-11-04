@@ -68,7 +68,7 @@ This repository is a template: `make new NAME=x DEST=<dir>` generates a project 
 - No import cycles anywhere.
 - The database (`src/server/db.ts`, `pg`, `drizzle-orm/node-postgres`) is imported only from `features/*/server/**`, `src/server/**` and `app/api/health/route.ts`; drizzle-orm's query builder (`eq`, `sql`) holds no connection and is not restricted. `src/__tests__/architecture.test.ts` breaks these rules on purpose and checks that dependency-cruiser reports them (pnpm resolves packages under `node_modules/.pnpm/`, which a rule's pattern must match).
 - Code that can reach the browser (`features/*/index.ts`, `features/*/components/**`, `components/**`, `hooks/**`) never imports `server.ts`, `server/**` or `src/server/**`. Every server module starts with `import "server-only"` (a test checks), so a client component that reaches one through other modules fails `next build`.
-- Server configuration is read only in `src/server/env.ts` (Biome `noProcessEnv`; `src/lib/env.ts` reads only `NODE_ENV`).
+- Server configuration is read only in `src/server/env.ts` (Biome `noProcessEnv`; `src/lib/env.ts` reads only `NODE_ENV`, `src/instrumentation.ts` only `NEXT_RUNTIME`). `src/instrumentation.ts` checks every setting when the server starts.
 
 A derived project that adds a layer adds it to the table and to the matching rule in `.dependency-cruiser.cjs` in the same commit. Fix a violation by moving code, not by adding an exception.
 

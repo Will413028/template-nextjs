@@ -11,8 +11,8 @@ const nextConfig: NextConfig = {
   },
   // cacheComponents stays off: a prerendered shell carries scripts without this request's nonce, which the CSP's
   // 'strict-dynamic' blocks, so the page never hydrates (Next.js CSP guide: PPR is incompatible with nonces).
-  async headers() {
-    return [
+  headers() {
+    return Promise.resolve([
       {
         source: "/(.*)",
         headers: [
@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-    ];
+    ]);
   },
 };
 

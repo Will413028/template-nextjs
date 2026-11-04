@@ -153,7 +153,8 @@ class CommitPolicyTest(unittest.TestCase):
 
     def test_trailer_above_the_scissors_line_counts(self):
         self.write("biome.json", "{}\n")
-        message = "ci: lint\n\nQuality-Gate: why\n# ------------------------ >8 ------------------------\ndiff --git a b\n"
+        scissors = "# ------------------------ >8 ------------------------\n"
+        message = f"ci: lint\n\nQuality-Gate: why\n{scissors}diff --git a b\n"
         self.assertEqual(self.check_staged(message).returncode, 0)
 
     def test_head_only_range_checks_the_root_commit(self):

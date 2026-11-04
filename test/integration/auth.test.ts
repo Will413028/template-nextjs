@@ -102,7 +102,7 @@ function setup(
   return { auth, advance, counts, logs, signUp, signIn };
 }
 
-async function sessionRows(userId: string) {
+function sessionRows(userId: string) {
   return db
     .select({ tokenHash: sessions.tokenHash, id: sessions.id })
     .from(sessions)
@@ -223,10 +223,10 @@ describe("sign-in", () => {
     let failNext = true;
     const { auth } = setup({
       hasher: {
-        hash: async (password) => {
+        hash: (password) => {
           if (failNext) {
             failNext = false;
-            throw new Error("out of memory");
+            return Promise.reject(new Error("out of memory"));
           }
           return inner.hash(password);
         },

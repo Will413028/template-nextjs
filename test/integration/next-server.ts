@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 // Starts the production build (`next build` ran first: pnpm check in CI) with `next start` and the peer preload, the
 // way the image runs it, on a free port; no browser (plan step 0 (a) §7).
 
-async function freePort(): Promise<number> {
+function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer().listen(0, "127.0.0.1", () => {
       const address = server.address();

@@ -50,13 +50,15 @@ FORBIDDEN = re.compile(
     "|".join(re.escape(s) for s in (OLD_REPO, OLD_DB, OLD_NAME, GENERATOR, MAKE_TARGET, BEGIN, END)),
     re.IGNORECASE,
 )
-# A path ending in an excluded directory's name, at a path boundary, with any leading ./ and ../ (checked by resolving it
-# against the referring file: src/mail/x.ts's ./template/ is src/mail/template/, which the output keeps).
+# A path ending in an excluded directory's name, at a path boundary, with any leading ./ and ../ (checked by resolving
+# it against the referring file: src/mail/x.ts's ./template/ is src/mail/template/, which the output keeps).
 PATH_REF = re.compile(
     r"(?<![\w./@-])((?:\.\.?/)*)("
     # template/ needs its slash (the word alone is ordinary text); docs/plans is a path either way
-    + "|".join(re.escape(prefix) if "/" not in prefix.rstrip("/") else re.escape(prefix.rstrip("/")) + r"(?![\w.-])"
-               for prefix in EXCLUDED)
+    + "|".join(
+        re.escape(prefix) if "/" not in prefix.rstrip("/") else re.escape(prefix.rstrip("/")) + r"(?![\w.-])"
+        for prefix in EXCLUDED
+    )
     + ")"
 )
 # What git archive leaves out; template/ is exported for its derived files and dropped after they are moved.
@@ -118,16 +120,23 @@ def excluded_refs(rel: str, text: str) -> list[str]:
 def check_export_attributes(top: pathlib.Path, sha: str) -> None:
     """Refuse when any attribute source git archive reads (the tree's .gitattributes, .git/info/attributes,
     core.attributesFile) sets an export attribute on an exported path."""
-    paths = [p for p in run_git(top, "ls-tree", "-r", "-z", "--name-only", sha).split(b"\0")
-             # template/ outside derived/ is dropped after the export: its attributes cannot change the output
-             if p and (p.decode().startswith(DERIVED) or not p.decode().startswith(EXCLUDED))]
+    paths = [
+        p
+        for p in run_git(top, "ls-tree", "-r", "-z", "--name-only", sha).split(b"\0")
+        # template/ outside derived/ is dropped after the export: its attributes cannot change the output
+        if p and (p.decode().startswith(DERIVED) or not p.decode().startswith(EXCLUDED))
+    ]
     if not paths:
         return
-    fields = run_git(top, "check-attr", "-z", "--stdin", "--source", sha, *EXPORT_ATTRIBUTES,
-                     stdin=b"\0".join(paths)).split(b"\0")
-    hits = sorted({f"{path.decode()} ({attr.decode()})"
-                   for path, attr, value in zip(fields[0::3], fields[1::3], fields[2::3])
-                   if value not in (b"unspecified", b"unset")})
+    output = run_git(top, "check-attr", "-z", "--stdin", "--source", sha, *EXPORT_ATTRIBUTES, stdin=b"\0".join(paths))
+    fields = output.removesuffix(b"\0").split(b"\0")  # path, attribute, value; each ends with a NUL
+    hits = sorted(
+        {
+            f"{path.decode()} ({attr.decode()})"
+            for path, attr, value in zip(fields[0::3], fields[1::3], fields[2::3], strict=True)
+            if value not in (b"unspecified", b"unset")
+        }
+    )
     if hits:
         raise GenerateError(f"export attributes would change the output: {', '.join(hits)}")
 
@@ -146,14 +155,8 @@ def export(top: pathlib.Path, sha: str, into: pathlib.Path, *pathspecs: str) -> 
         raise GenerateError(f"the template holds an entry the export refuses: {error}") from error
 
 
-def materialize(top: pathlib.Path, out: pathlib.Path, name: str, repo: str) -> str:
-    """Write the checked output tree of top's HEAD to out (which must not exist). Returns the template commit."""
-    sha = run_git(top, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
-    check_export_attributes(top, sha)
-    # one export: everything but the plans; the derived files are moved into place, then template/ is dropped
-    export(top, sha, out, ".", *(f":!{prefix}" for prefix in EXPORTED_EXCLUDED))
-    if not (out / "package.json").is_file():
-        raise GenerateError(f"{top} does not look like the template: no package.json at HEAD")
+def place_derived_files(out: pathlib.Path) -> None:
+    """Move template/derived/<path> over <path>, then drop the excluded directories."""
     derived = out / DERIVED
     if derived.is_dir():
         for source in sorted(p for p in derived.rglob("*") if not p.is_dir() or p.is_symlink()):
@@ -163,34 +166,50 @@ def materialize(top: pathlib.Path, out: pathlib.Path, name: str, repo: str) -> s
     for prefix in EXCLUDED:
         shutil.rmtree(out / prefix, ignore_errors=True)
 
-    table = {OLD_REPO: repo, OLD_DB: name.replace("-", "_"), OLD_NAME: name}
+
+def leaks(rel: str, text: str) -> list[str]:
+    """What text (from the file rel) still holds of the template."""
+    return [f"{rel}: still contains {m.group(0)!r}" for m in FORBIDDEN.finditer(text)] + [
+        f"{rel}: refers to the excluded {ref!r}" for ref in excluded_refs(rel, text)
+    ]
+
+
+def rewrite(out: pathlib.Path, file: pathlib.Path, table: dict[str, str]) -> list[str]:
+    """Strip the template-only blocks of one output entry and replace its tokens; returns its problems."""
+    rel = file.relative_to(out).as_posix()
+    problems = [f"{rel}: the path holds {m.group(0)!r} (file names are not rewritten)" for m in FORBIDDEN.finditer(rel)]
+    if file.is_symlink():  # a link carries a name or a target the checks below never read
+        return [*problems, f"{rel}: a symbolic link (not copied; use a regular file)"]
+    if not file.is_file():
+        return problems
+    data = file.read_bytes()
+    try:
+        text = drop_template_only(rel, data.decode("utf-8"))
+    except UnicodeDecodeError:  # binary: kept as it is, still checked
+        return problems + leaks(rel, data.decode("latin-1"))
     # one pass, longest token first: a replacement is never scanned again, so a repository may contain the name
     pattern = re.compile("|".join(re.escape(t) for t in sorted(table, key=len, reverse=True)))
+    # what the output keeps from the template, the replacements blanked out: they may name the project
+    problems += leaks(rel, pattern.sub("\0", text))
+    new = pattern.sub(lambda m: table[m.group(0)], text).encode("utf-8")
+    if new != data:
+        file.write_bytes(new)
+    return problems
+
+
+def materialize(top: pathlib.Path, out: pathlib.Path, name: str, repo: str) -> str:
+    """Write the checked output tree of top's HEAD to out (which must not exist). Returns the template commit."""
+    sha = run_git(top, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
+    check_export_attributes(top, sha)
+    # one export: everything but the plans; the derived files are moved into place, then template/ is dropped
+    export(top, sha, out, ".", *(f":!{prefix}" for prefix in EXPORTED_EXCLUDED))
+    if not (out / "package.json").is_file():
+        raise GenerateError(f"{top} does not look like the template: no package.json at HEAD")
+    place_derived_files(out)
+    table = {OLD_REPO: repo, OLD_DB: name.replace("-", "_"), OLD_NAME: name}
     problems: list[str] = []
     for file in sorted(out.rglob("*")):
-        rel = file.relative_to(out).as_posix()
-        problems += [f"{rel}: the path holds {m.group(0)!r} (file names are not rewritten)"
-                     for m in FORBIDDEN.finditer(rel)]
-        if file.is_symlink():  # a link carries a name or a target the checks below never read
-            problems.append(f"{rel}: a symbolic link (not copied; use a regular file)")
-            continue
-        if not file.is_file():
-            continue
-        data = file.read_bytes()
-        try:
-            text = drop_template_only(rel, data.decode("utf-8"))
-        except UnicodeDecodeError:  # binary: kept as it is, still checked
-            latin = data.decode("latin-1")
-            problems += [f"{rel}: still contains {m.group(0)!r}" for m in FORBIDDEN.finditer(latin)]
-            problems += [f"{rel}: refers to the excluded {ref!r}" for ref in excluded_refs(rel, latin)]
-            continue
-        # what the output keeps from the template, the replacements blanked out: they may name the project
-        kept = pattern.sub("\0", text)
-        problems += [f"{rel}: still contains {m.group(0)!r}" for m in FORBIDDEN.finditer(kept)]
-        problems += [f"{rel}: refers to the excluded {ref!r}" for ref in excluded_refs(rel, kept)]
-        new = pattern.sub(lambda m: table[m.group(0)], text).encode("utf-8")
-        if new != data:
-            file.write_bytes(new)
+        problems += rewrite(out, file, table)
     if problems:
         raise GenerateError("the output is not clean; nothing was written:\n  " + "\n  ".join(problems))
     return sha
@@ -200,8 +219,10 @@ def generate(top: pathlib.Path, dest: pathlib.Path, name: str, repo: str) -> str
     """Generate into dest (missing or an empty directory). Returns the template commit it was generated from."""
     check_arguments(name, repo)
     if not hasattr(tarfile, "data_filter"):
-        raise GenerateError(f"Python {sys.version.split()[0]} lacks tarfile's extraction filters "
-                            "(Python 3.12+, 3.11.4+, 3.10.12+, 3.9.17+ or 3.8.17+ has them)")
+        raise GenerateError(
+            f"Python {sys.version.split()[0]} lacks tarfile's extraction filters "
+            "(Python 3.12+, 3.11.4+, 3.10.12+, 3.9.17+ or 3.8.17+ has them)"
+        )
     dest = dest.absolute()
     if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
         raise GenerateError(f"{dest} exists and is not an empty directory")
@@ -232,7 +253,7 @@ def generate(top: pathlib.Path, dest: pathlib.Path, name: str, repo: str) -> str
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("name", help="lowercase letters, digits and hyphens, e.g. my-project")
     parser.add_argument("dest", type=pathlib.Path, help="new or empty directory")
     parser.add_argument("--repo", help=f"GitHub repository as owner/name (default {DEFAULT_OWNER}/<name>)")

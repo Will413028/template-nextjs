@@ -19,6 +19,7 @@ CONCURRENTLY is caught by squawk (.squawk.toml assumes a transaction: the migrat
 """
 
 import argparse
+import itertools
 import json
 import pathlib
 import re
@@ -44,7 +45,7 @@ def static_problems(journal: list[dict], files: dict[str, str]) -> list[str]:
     tags = [e["tag"] for e in journal]
     problems += [f"migrations/{t}.sql is in the journal but missing" for t in tags if t not in files]
     problems += [f"migrations/{t}.sql is not in the journal" for t in sorted(files) if t not in tags]
-    for before, after in zip(journal, journal[1:]):
+    for before, after in itertools.pairwise(journal):
         if after["when"] <= before["when"]:
             problems.append(
                 f"journal entry {after['tag']} is not newer than {before['tag']}: the migrator would skip it; "
@@ -57,8 +58,9 @@ def static_problems(journal: list[dict], files: dict[str, str]) -> list[str]:
     return problems
 
 
-def immutability_problems(base_journal: list[dict], journal: list[dict], base_files: dict[str, str],
-                          files: dict[str, str]) -> list[str]:
+def immutability_problems(
+    base_journal: list[dict], journal: list[dict], base_files: dict[str, str], files: dict[str, str]
+) -> list[str]:
     problems = []
     if journal[: len(base_journal)] != base_journal:
         problems.append("the journal's existing entries changed; only append new migrations")

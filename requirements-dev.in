@@ -1,0 +1,4 @@
+# Python tools for the checks (make py-tools installs them into .venv). Compile requirements-dev.txt with:
+#   uv pip compile --generate-hashes --python-version 3.12 requirements-dev.in -o requirements-dev.txt
+ruff==0.17.3
+diff-cover==11.0.0

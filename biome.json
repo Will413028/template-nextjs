@@ -44,10 +44,13 @@
         "noArrayIndexKey": "warn",
         "noImportCycles": "error",
         "noSkippedTests": "error",
-        "noFocusedTests": "error"
+        "noFocusedTests": "error",
+        "noEvolvingTypes": "error",
+        "useAwait": "error"
       },
       "nursery": {
         "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
         "useExhaustiveSwitchCases": "error"
       },
       "a11y": {
@@ -59,7 +62,10 @@
         "noImgElement": "warn"
       },
       "style": {
-        "noProcessEnv": "error"
+        "noProcessEnv": "error",
+        "noNonNullAssertion": "error",
+        "noParameterAssign": "error",
+        "useThrowNewError": "error"
       },
       "complexity": {
         "noExcessiveCognitiveComplexity": "error"
@@ -76,6 +82,7 @@
       "includes": [
         "src/lib/env.ts",
         "src/server/env.ts",
+        "src/instrumentation.ts",
         "scripts/migrate.mts",
         "test/integration/health.test.ts",
         "test/integration/next-server.ts",

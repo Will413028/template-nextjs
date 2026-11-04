@@ -16,6 +16,19 @@ export default defineConfig({
     // Random file and test order, so a test that depends on another's leftovers fails; the run prints its seed, and
     // --sequence.seed=<seed> replays that order.
     sequence: { shuffle: true },
+    // Coverage (on with --coverage): CI's diff-cover requires 80% of the changed lines in these files. Pages and
+    // components are left out: their code runs in next start, where no unit or integration test can measure it.
+    coverage: {
+      provider: "v8",
+      reporter: ["cobertura"],
+      include: ["src/**/*.ts"],
+      exclude: [
+        "src/app/**",
+        "src/**/__tests__/**",
+        "src/**/*.test.ts",
+        "src/**/*.d.ts",
+      ],
+    },
     // next-intl's middleware imports "next/server" without an extension, which Node's ESM resolver rejects;
     // inlining lets Vite resolve it (proxy.test.ts).
     server: { deps: { inline: ["next-intl"] } },

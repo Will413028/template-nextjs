@@ -7,12 +7,11 @@ Usage:
   python3 scripts/check_commit_policy.py --range <head>          # CI, a new branch: every commit reachable from head
 
 A commit needs a `Quality-Gate: <reason>` trailer when it edits a checker's configuration (GATE_FILES), changes the
-`scripts` of package.json (where pnpm check is composed), or moves a lock in scripts/quality-locks.json the bad way (more suppressions, fewer tests). Moving a lock the good way needs no
-reason. A commit that changes more than MAX_LINES lines, not counting files .gitattributes marks linguist-generated,
-needs a `Large-Change: <reason>` trailer: a change that size is hard to review, so it is split or says why it cannot
-be. Run from the repository root. In --commit-msg mode the staged changes are compared with HEAD, so an amend is
-checked only for what it adds; CI checks the whole commit.
-"""
+`scripts` of package.json (where pnpm check is composed), or moves a lock in scripts/quality-locks.json the bad way
+(more suppressions, fewer tests). Moving a lock the good way needs no reason. A commit that changes more than MAX_LINES
+lines, not counting files .gitattributes marks linguist-generated, needs a `Large-Change: <reason>` trailer: a change
+that size is hard to review, so it is split or says why it cannot be. Run from the repository root. In --commit-msg mode
+the staged changes are compared with HEAD, so an amend is checked only for what it adds; CI checks the whole commit."""
 
 import argparse
 import json

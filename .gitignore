@@ -32,3 +32,6 @@ __pycache__/
 *.pem
 npm-debug.log*
 .pnpm-debug.log*
+
+# Python tools (make py-tools)
+/.venv/

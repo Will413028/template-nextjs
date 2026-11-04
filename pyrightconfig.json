@@ -1,0 +1,6 @@
+{
+  "include": ["scripts", "template"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "standard",
+  "reportUnnecessaryTypeIgnoreComment": "error"
+}

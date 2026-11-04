@@ -400,7 +400,7 @@ describe("the per-IP limit", () => {
   });
 
   it("ignores X-Forwarded-For from a peer it does not trust", async () => {
-    const results = [];
+    const results: unknown[] = [];
     for (let i = 0; i < 3; i++) {
       results.push(
         (

@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-import tool_versions as tv  # noqa: E402
+import tool_versions as tv
 
 A, B = ("a" * 64), ("b" * 64)
 

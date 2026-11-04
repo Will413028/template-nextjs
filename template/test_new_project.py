@@ -8,13 +8,13 @@ import importlib.util
 import os
 import pathlib
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
 SCRIPT = pathlib.Path(__file__).resolve().parent / "new_project.py"
 _spec = importlib.util.spec_from_file_location("new_project", SCRIPT)
+assert _spec is not None and _spec.loader is not None
 new_project = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(new_project)
 
@@ -22,15 +22,19 @@ NAME = new_project.OLD_NAME
 DB = new_project.OLD_DB
 REPO = new_project.OLD_REPO
 GIT_ENV = {
-    "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.test",
-    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.test",
-    "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_AUTHOR_NAME": "t",
+    "GIT_AUTHOR_EMAIL": "t@example.test",
+    "GIT_COMMITTER_NAME": "t",
+    "GIT_COMMITTER_EMAIL": "t@example.test",
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_NOSYSTEM": "1",
 }
 
 
 def git(cwd: pathlib.Path, *args: str) -> str:
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
-                          env={**os.environ, **GIT_ENV}).stdout
+    return subprocess.run(
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True, env={**os.environ, **GIT_ENV}
+    ).stdout
 
 
 def make_template(root: pathlib.Path, files: dict[str, str]) -> pathlib.Path:
@@ -94,7 +98,8 @@ class GenerateTest(unittest.TestCase):
 
     def test_a_path_naming_the_template_writes_nothing(self):
         # file names are not rewritten: a name that would need it is refused instead of renamed
-        self.assert_refused_and_untouched("the path holds", files={**BASE_FILES, f"{NAME}.txt": "named after the template\n"})
+        files = {**BASE_FILES, f"{NAME}.txt": "named after the template\n"}
+        self.assert_refused_and_untouched("the path holds", files=files)
 
     def test_a_repository_that_names_the_project_is_replaced_once(self):
         # sequential str.replace rewrote acme/<name>-fork a second time; one pass never rescans its output
@@ -118,7 +123,8 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual(git(dest, "remote").strip(), "")
         self.assertEqual(git(dest, "status", "--porcelain"), "")
         sha = git(src, "rev-parse", "HEAD").strip()
-        self.assertIn(f"Large-Change: initial commit generated from {NAME}@{sha}", git(dest, "log", "-1", "--format=%B"))
+        message = git(dest, "log", "-1", "--format=%B")
+        self.assertIn(f"Large-Change: initial commit generated from {NAME}@{sha}", message)
 
     def test_keeps_the_executable_bit(self):
         files = {**BASE_FILES, "run.sh": "#!/bin/sh\n"}
@@ -131,7 +137,7 @@ class GenerateTest(unittest.TestCase):
         self.assertTrue(os.access(dest / "run.sh", os.X_OK))
         self.assertFalse(os.access(dest / "package.json", os.X_OK))
 
-    def assert_refused_and_untouched(self, error, files=None, name="my-app", repo=None, dest_setup=None, root=None):
+    def assert_refused_and_untouched(self, error, *, files=None, dest_setup=None, root=None):
         """generate() fails with a message matching error (the check meant, not some other one) and writes nothing."""
         root = root or self.root
         dest = root / "out"
@@ -140,7 +146,7 @@ class GenerateTest(unittest.TestCase):
         before = sorted(p.name for p in root.iterdir())
         src = make_template(root, BASE_FILES if files is None else files)
         with self.assertRaisesRegex(new_project.GenerateError, error):
-            new_project.generate(src, dest, name, repo or f"acme/{name}")
+            new_project.generate(src, dest, "my-app", "acme/my-app")
         after = sorted(p.name for p in root.iterdir() if p.name != "src")
         self.assertEqual(after, before, "a refused run left files next to the template")
         if dest.exists():
@@ -148,17 +154,23 @@ class GenerateTest(unittest.TestCase):
 
     def test_output_still_naming_the_template_writes_nothing(self):
         # a capitalised form the table does not cover: the check runs before any file is written
-        self.assert_refused_and_untouched("still contains 'TEMPLATE-NEXTJS'", files={**BASE_FILES, "notes.md": "TEMPLATE-NEXTJS\n"})
+        files = {**BASE_FILES, "notes.md": "TEMPLATE-NEXTJS\n"}
+        self.assert_refused_and_untouched("still contains 'TEMPLATE-NEXTJS'", files=files)
 
     def test_output_referring_to_the_generator_writes_nothing(self):
-        self.assert_refused_and_untouched("still contains 'new_project.py'",
-                                          files={**BASE_FILES, "notes.md": "run python3 new_project.py\n"})
+        self.assert_refused_and_untouched(
+            "still contains 'new_project.py'", files={**BASE_FILES, "notes.md": "run python3 new_project.py\n"}
+        )
 
     def test_unbalanced_template_only_block_writes_nothing(self):
         self.assert_refused_and_untouched("never closed", files={**BASE_FILES, "x.yml": "a\n# >>> template-only\nb\n"})
 
     def test_refuses_a_destination_that_is_not_empty(self):
-        self.assert_refused_and_untouched("not an empty directory", dest_setup=lambda d: (d.mkdir(), (d / "keep").write_text("x")))
+        def setup(dest: pathlib.Path) -> None:
+            dest.mkdir()
+            (dest / "keep").write_text("x")
+
+        self.assert_refused_and_untouched("not an empty directory", dest_setup=setup)
 
     def test_an_empty_destination_directory_is_used(self):
         dest = self.root / "out"
@@ -196,15 +208,18 @@ class GenerateTest(unittest.TestCase):
 
     def test_output_referring_to_an_excluded_directory_writes_nothing(self):
         # (file, text, the reference reported); a relative path is resolved against the file that holds it
-        cases = (("notes.md", "see `docs/plans/`\n", "docs/plans"),
-                 ("notes.md", "see template/README.md\n", "template"),
-                 ("docs/notes.md", "[plan](../docs/plans/x.md)\n", "../docs/plans"),
-                 ("notes.md", "run ./template/x\n", "./template"),
-                 ("notes.md", "run make new NAME=x\n", "make new NAME="))
+        cases = (
+            ("notes.md", "see `docs/plans/`\n", "docs/plans"),
+            ("notes.md", "see template/README.md\n", "template"),
+            ("docs/notes.md", "[plan](../docs/plans/x.md)\n", "../docs/plans"),
+            ("notes.md", "run ./template/x\n", "./template"),
+            ("notes.md", "run make new NAME=x\n", "make new NAME="),
+        )
         for number, (rel, text, ref) in enumerate(cases):
             with self.subTest(rel=rel, text=text):
-                self.assert_refused_and_untouched(f"{rel}: .*{ref}", files={**BASE_FILES, rel: text},
-                                                  root=self.case(str(number)))
+                self.assert_refused_and_untouched(
+                    f"{rel}: .*{ref}", files={**BASE_FILES, rel: text}, root=self.case(str(number))
+                )
 
     def test_a_binary_file_referring_to_an_excluded_directory_writes_nothing(self):
         src = make_template(self.root, BASE_FILES)
@@ -216,11 +231,13 @@ class GenerateTest(unittest.TestCase):
         self.assertFalse((self.root / "out").exists())
 
     def test_ordinary_text_and_unrelated_template_directories_are_allowed(self):
-        files = {**BASE_FILES,
-                 "src/mail/x.ts": 'import "./template/body";\n',  # src/mail/template/, which the output keeps
-                 "src/mail/template/body.ts": "export {};\n",
-                 "src/mail/y.ts": 'import "./emails/template/a"; import "@/template/b"; // src/docs/plans/c\n',
-                 "notes.md": "make new tables; the new_project table; ../template/ from the root leaves the tree\n"}
+        files = {
+            **BASE_FILES,
+            "src/mail/x.ts": 'import "./template/body";\n',  # src/mail/template/, which the output keeps
+            "src/mail/template/body.ts": "export {};\n",
+            "src/mail/y.ts": 'import "./emails/template/a"; import "@/template/b"; // src/docs/plans/c\n',
+            "notes.md": "make new tables; the new_project table; ../template/ from the root leaves the tree\n",
+        }
         _, dest, _ = self.generate(files=files)
         self.assertTrue((dest / "src/mail/template/body.ts").exists())
 
@@ -239,8 +256,9 @@ class GenerateTest(unittest.TestCase):
                 self.assertEqual(sorted(p.name for p in root.iterdir()), ["src"])
 
     def test_export_attributes_write_nothing(self):
-        self.assert_refused_and_untouched(r"SECURITY\.md \(export-ignore\)",
-                                          files={**BASE_FILES, ".gitattributes": "SECURITY.md export-ignore\n"})
+        self.assert_refused_and_untouched(
+            r"SECURITY\.md \(export-ignore\)", files={**BASE_FILES, ".gitattributes": "SECURITY.md export-ignore\n"}
+        )
 
     def test_export_attributes_outside_the_tree_write_nothing(self):
         # .git/info/attributes and core.attributesFile reach git archive too
@@ -260,14 +278,21 @@ class GenerateTest(unittest.TestCase):
                 self.assertFalse((root / "out").exists())
 
     def test_export_attributes_on_a_derived_file_write_nothing(self):
-        self.assert_refused_and_untouched(r"template/derived/README\.md \(export-ignore\)",
-                                          files={**BASE_FILES, "template/.gitattributes": "derived/** export-ignore\n"})
+        self.assert_refused_and_untouched(
+            r"template/derived/README\.md \(export-ignore\)",
+            files={**BASE_FILES, "template/.gitattributes": "derived/** export-ignore\n"},
+        )
 
     def test_unset_and_commented_export_attributes_are_allowed(self):
         attributes = "# SECURITY.md export-ignore\nSECURITY.md -export-ignore\n*.bin export-ignore\n"
         # template/ outside derived/ is dropped after the export, so its attributes cannot change the output
-        _, dest, _ = self.generate(files={**BASE_FILES, ".gitattributes": attributes,
-                                          "template/.gitattributes": "new_project.py export-ignore\n"})
+        _, dest, _ = self.generate(
+            files={
+                **BASE_FILES,
+                ".gitattributes": attributes,
+                "template/.gitattributes": "new_project.py export-ignore\n",
+            }
+        )
         self.assertTrue((dest / "SECURITY.md").exists())
 
     def test_a_derived_file_keeps_its_mode_and_may_add_a_directory(self):
@@ -285,16 +310,20 @@ class GenerateTest(unittest.TestCase):
         dest.mkdir()
         src = make_template(self.root, BASE_FILES)
         # an OSError (EBUSY on a mount point, a permission) is reported as an error, not a traceback
-        with mock.patch.object(new_project.os, "rename", side_effect=OSError("busy")), \
-                self.assertRaisesRegex(new_project.GenerateError, "busy"):
+        with (
+            mock.patch.object(new_project.os, "rename", side_effect=OSError("busy")),
+            self.assertRaisesRegex(new_project.GenerateError, "busy"),
+        ):
             new_project.generate(src, dest, "my-app", "acme/my-app")
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["out", "src"])
         self.assertEqual(list(dest.iterdir()), [])
 
     def test_an_old_python_is_an_error_message(self):
         # tarfile's extraction filters came with Python 3.12 (and late 3.8-3.11 patch releases)
-        with mock.patch.object(new_project, "tarfile", object()), \
-                self.assertRaisesRegex(new_project.GenerateError, r"3\.12\+, 3\.11\.4\+"):
+        with (
+            mock.patch.object(new_project, "tarfile", object()),
+            self.assertRaisesRegex(new_project.GenerateError, r"3\.12\+, 3\.11\.4\+"),
+        ):
             new_project.generate(make_template(self.root, BASE_FILES), self.root / "out", "my-app", "acme/my-app")
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
 
@@ -302,11 +331,21 @@ class GenerateTest(unittest.TestCase):
         new_project.check_arguments("a" * 57, "acme/x")  # a57_owner is 63 bytes, PostgreSQL's limit
 
     def test_refuses_bad_names_and_repositories(self):
-        for name, repo in (("My-App", "acme/x"), ("my_app", "acme/x"), ("1app", "acme/x"), (NAME, "acme/x"),
-                           ("a" * 58, "acme/x"), ("my-app", "acme"), ("my-app", "acme/x/y"), ("my-app", "acme/x y")):
-            with self.subTest(name=name, repo=repo):
-                with self.assertRaisesRegex(new_project.GenerateError, "invalid|longer|other than"):
-                    new_project.check_arguments(name, repo)
+        for name, repo in (
+            ("My-App", "acme/x"),
+            ("my_app", "acme/x"),
+            ("1app", "acme/x"),
+            (NAME, "acme/x"),
+            ("a" * 58, "acme/x"),
+            ("my-app", "acme"),
+            ("my-app", "acme/x/y"),
+            ("my-app", "acme/x y"),
+        ):
+            with (
+                self.subTest(name=name, repo=repo),
+                self.assertRaisesRegex(new_project.GenerateError, "invalid|longer|other than"),
+            ):
+                new_project.check_arguments(name, repo)
 
 
 class TemplateRepositoryTest(unittest.TestCase):
@@ -323,4 +362,4 @@ class TemplateRepositoryTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    sys.exit(unittest.main())
+    unittest.main()

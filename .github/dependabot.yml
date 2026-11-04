@@ -33,6 +33,15 @@ updates:
     cooldown:
       default-days: 7
 
+  # ruff and diff-cover (requirements-dev.in; recompile requirements-dev.txt with the command at its top)
+  - package-ecosystem: pip
+    target-branch: dev
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
   - package-ecosystem: npm
     target-branch: dev
     directory: /
