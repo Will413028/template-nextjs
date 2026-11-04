@@ -55,6 +55,8 @@ related-commits: [ffc08b5, 962a293, 4dee799, 97cb3a6, d0ef4fc]
 - 衍生專案要帳號鎖定、trusted device 或 admin → 照 Go 版的帳號濫用 ADR 補做 D3 延後的部分。
 - 兩個 feature 需要互相 join 資料表 → 經對方 `server.ts` 取資料；做不到時重評 D5 的邊界。
 - 要開 `cacheComponents` → 先決定 CSP 怎麼處理 nonce。
+- items 是範例，不寫安全日誌、不限流、每人數量與 description 長度只受 1 MB 請求上限約束 → 衍生專案的資料要能追查誰改了什麼時，加 `securityLog` 事件；註冊對陌生人開放的正式部署前，加每人數量上限與 action 限流。
+- CSP 的 `style-src` 允許 `'unsafe-inline'`（Next.js 與 next-intl 會插入行內樣式）→ 頁面會顯示使用者可控制的 HTML 或 CSS 時，改用 nonce 或 hash 並拿掉它。
 
 ## Related
 

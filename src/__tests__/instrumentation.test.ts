@@ -1,5 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { onRequestError } from "@/instrumentation";
+
+const checks = vi.hoisted(() => ({
+  databaseConfig: vi.fn(),
+  authConfig: vi.fn(),
+  trustedProxies: vi.fn(),
+}));
+vi.mock("@/server/env", () => ({
+  databaseConfig: checks.databaseConfig,
+  authConfig: checks.authConfig,
+}));
+vi.mock("@/server/request", () => ({
+  trustedProxies: checks.trustedProxies,
+}));
+
+import { onRequestError, register } from "@/instrumentation";
 
 describe("onRequestError", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -41,5 +55,34 @@ describe("onRequestError", () => {
       digest: "123",
     });
     expect(line).not.toContain("hunter2");
+  });
+});
+
+describe("register", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.clearAllMocks();
+  });
+
+  it("reads every server setting when the Node.js server starts", async () => {
+    vi.stubEnv("NEXT_RUNTIME", "nodejs");
+    await register();
+    expect(checks.databaseConfig).toHaveBeenCalledOnce();
+    expect(checks.authConfig).toHaveBeenCalledOnce();
+    expect(checks.trustedProxies).toHaveBeenCalledOnce();
+  });
+
+  it("stops the start when a setting is wrong", async () => {
+    vi.stubEnv("NEXT_RUNTIME", "nodejs");
+    checks.trustedProxies.mockImplementationOnce(() => {
+      throw new Error("not an address prefix: x");
+    });
+    await expect(register()).rejects.toThrow("not an address prefix");
+  });
+
+  it("reads nothing in the edge runtime, which has no Node.js modules", async () => {
+    vi.stubEnv("NEXT_RUNTIME", "edge");
+    await register();
+    expect(checks.databaseConfig).not.toHaveBeenCalled();
   });
 });

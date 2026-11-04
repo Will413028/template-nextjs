@@ -1,6 +1,6 @@
 import { randomBytes, randomUUIDv7 } from "node:crypto";
 import type pg from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createHasher } from "@/features/auth/server/password";
 import { createAuthService, type Viewer } from "@/features/auth/server/service";
 import { PAGE_SIZE } from "@/features/items/input";
@@ -153,6 +153,22 @@ describe("text PostgreSQL cannot hold", () => {
 });
 
 describe("listing items", () => {
+  it("reads a page, and says whether another follows, in one query", async () => {
+    const viewer = await signUp();
+    for (let i = 0; i < PAGE_SIZE + 1; i++) await create(viewer, `item ${i}`);
+    // every statement drizzle sends goes through the pool's query; one per page, never one per item (N+1)
+    const queries = vi.spyOn(pool, "query");
+    try {
+      const first = await list(viewer);
+      expect(first.items).toHaveLength(PAGE_SIZE);
+      expect(queries).toHaveBeenCalledTimes(1);
+      await list(viewer, { cursor: first.nextCursor });
+      expect(queries).toHaveBeenCalledTimes(2);
+    } finally {
+      queries.mockRestore();
+    }
+  });
+
   it("shows only the viewer's, newest first, with no next cursor on the only page", async () => {
     const alice = await signUp();
     const bob = await signUp();

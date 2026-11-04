@@ -33,7 +33,7 @@ related-commits: [9eee0b0, b15744e, a0d6baa, 26acab2, dc20c63, 5ef66dc, 711887f,
   2. client IP：preload（`node -r peer.cjs`）記下真實的連線來源，沿用 Go 的 `TRUSTED_PROXIES` 演算法。
   3. 失效 cookie：頁面讀到失效 session 時導到清 cookie 的 Route Handler；action 與登出直接清。
   4. access log 由 Caddy 記；未捕捉錯誤由 `src/instrumentation.ts` 的 `onRequestError` 記成一行 JSON，帶 request id，不帶錯誤訊息。
-  5. 請求主體上限用 `serverActions.bodySizeLimit`，回應不是 413 problem；慢速標頭攻擊交給 Caddy。
+  5. 請求主體上限是 Next.js 的 `serverActions.bodySizeLimit`（沒有另外設定，用它的預設 1 MB），超過時回應不是 413 problem；慢速標頭攻擊交給 Caddy。
   6. 契約的唯一來源是 zod schema，不是 OpenAPI。
   7. 登入成功只清這次來源的計數（Go 全清，搭配它的帳號層級上限；這裡沒有上限，全清會讓本人每登入一次就重置攻擊者的退避）。
   8. 密碼最少 15 字元以 NFKC 正規化後的長度計（最多 128 仍算原始輸入）。
