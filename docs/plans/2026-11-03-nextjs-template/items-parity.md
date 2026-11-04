@@ -16,7 +16,7 @@ Go 的 HTTP 形狀（狀態碼、`Location`、Content-Type、merge-patch 媒體�
 
 ## items 偏離清單
 
-1. 格式錯誤的 id（不是 UUID）：Go 回 422 `/id format`；這裡和不存在的 id 一樣是「找不到」（頁面 404、action `not_found`）。理由：頁面路徑上格式錯誤的 id 就是不存在的頁；和步驟 2 `revokeSession` 的處理一致；PostgreSQL 不會收到它。狀態：待 Will 確認（實作照這個建議先做）。
+1. 格式錯誤的 id（不是 UUID）：Go 回 422 `/id format`；這裡和不存在的 id 一樣是「找不到」（頁面 404、action `not_found`）。理由：頁面路徑上格式錯誤的 id 就是不存在的頁；和步驟 2 `revokeSession` 的處理一致；PostgreSQL 不會收到它。狀態：2026-11-05 Will 確認（RFC 9110：路徑上的 id 是目標資源的一部分，格式錯誤即不存在；Rails、Django、Stripe 同樣回 404）。
 
 ## Go 測試對照表
 
