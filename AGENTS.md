@@ -8,7 +8,7 @@ This repository is a template: `make new NAME=x DEST=<dir>` generates a project 
 
 ## Verification
 
-- Branch model: daily work goes to `dev`; `main` changes only through a `dev`→`main` PR merged with a merge commit (no squash, no rebase); never push to `main` directly. The pre-push hook compares against `origin/main` (the released code) on purpose.
+- Branch model: daily work goes to `dev`; `main` changes only through a `dev`→`main` PR merged with a merge commit (no squash, no rebase); never push to `main` directly. The pre-push hook compares against `origin/main` (the released code) on purpose. A `dev` ruleset requires `gate (ci)` for pull requests into `dev` (admins bypass it for direct pushes): `.github/workflows/dependabot-automerge.yml` auto-merges Dependabot's patch updates once it passes; minor and major updates wait for a person.
 - `pnpm check` runs everything CI's app job runs: TypeScript and Biome (`pnpm lint`), knip (`pnpm check:deps`), dependency-cruiser (`pnpm check:arch`), migration checks and squawk (`pnpm check:migrations`), the unit tests (`pnpm test:report`), the locks (`pnpm check:locks`) and `next build`. A task is complete only when it passes locally and CI is green.
 - Integration tests (`test/integration/`, `pnpm test:integration`) start PostgreSQL 18 in Docker with testcontainers and the production role setup. CI's app job runs them after `pnpm check`; `pnpm check` and the pre-push hook leave them out, so a shared dev machine never starts database containers. The compose stack job also runs only in CI. Browser and E2E tests run only in CI.
 - `make lint-docker` (hadolint, pinned with checksums in the `Makefile`) checks the Dockerfile; every finding fails, infos included.

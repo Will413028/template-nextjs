@@ -15,8 +15,9 @@ make up                         # http://localhost
 The project starts with one commit on `main` and no remote. Create its repository, then
 `git remote add origin git@github.com:Will413028/template-nextjs.git` and `git push -u origin main`; `SECURITY.md`
 links to that repository's advisory form. After this first push, set up the branch model `AGENTS.md` describes
-(a `dev` branch made from `main` as the default branch, merge commits only, `gate (ci)` required on `main`);
-from then on daily work goes to `dev`.
+(a `dev` branch made from `main` as the default branch, merge commits only, `gate (ci)` required on `main`, and a
+`dev` ruleset requiring `gate (ci)` that repository admins bypass, so Dependabot's patch updates merge themselves only
+after CI passes; turn on "Allow auto-merge"); from then on daily work goes to `dev`.
 
 `make dev` runs `next dev` inside the stack on http://localhost:3000. `pnpm check` runs CI's checks except the ones that
 start containers (Node.js 26, pnpm from `packageManager`); CI also runs `pnpm test:integration` and the compose stack.
