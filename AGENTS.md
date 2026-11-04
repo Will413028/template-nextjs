@@ -3,7 +3,7 @@
 Fullstack app built only on Next.js (no separate backend service): Server Actions, Drizzle on PostgreSQL 18, Docker Compose behind Caddy. It ships username and password auth (opaque sessions) and an items feature as the example vertical slice.
 
 <!-- >>> template-only -->
-This repository is a template: `make new NAME=x DEST=<dir>` generates a project from it (`template/new_project.py`), dropping `template/`, `docs/plans/` and every block between template-only markers (the comment lines that open and close the block below), and replacing `README.md` with `template/derived/README.md`. A line that only makes sense in the template goes inside such a block; CI's generate job runs every check on a generated project. A sibling of `template-go-nextjs` and `template-fastapi-nextjs`; it shares no code with them. The plan is `docs/plans/2026-11-03-nextjs-template.md`.
+This repository is a template: `make new NAME=x DEST=<dir>` generates a project from it (`template/new_project.py`), dropping `template/`, `docs/plans/` and every block between template-only markers (the comment lines that open and close the block below), and replacing `README.md` with `template/derived/README.md`. A line that only makes sense in the template goes inside such a block; CI's generate job runs every check on a generated project. A sibling of `template-go-nextjs` and `template-fastapi-nextjs`; it shares no code with them. The plan is `docs/plans/2026-11-03-nextjs-template.md`; the decisions about the template itself are in `template/adr/`.
 <!-- <<< template-only -->
 
 ## Verification
@@ -96,3 +96,4 @@ pnpm test:integration               # PostgreSQL integration tests (Docker; CI r
 Read before changing the matching area:
 
 - **Database**: `docs/rules/database-design.md` — naming, types, migrations, roles.
+- **Decisions**: `docs/adr/` — why the stack, auth and throttling are built this way; read before changing one of them.
