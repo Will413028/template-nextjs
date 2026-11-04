@@ -32,7 +32,7 @@ related-commits: [9eee0b0, b15744e, a0d6baa, 26acab2, dc20c63, 5ef66dc, 711887f,
   1. CSRF：`src/proxy.ts` 照 Go `CrossOriginProtection` 的順序做 Fetch Metadata 檢查，跨來源回 403；Next 內建的 Origin 檢查留作第二層。
   2. client IP：preload（`node -r peer.cjs`）記下真實的連線來源，沿用 Go 的 `TRUSTED_PROXIES` 演算法。
   3. 失效 cookie：頁面讀到失效 session 時導到清 cookie 的 Route Handler；action 與登出直接清。
-  4. access log 由 Caddy 記；未捕捉錯誤走 `instrumentation.ts` 的 `onRequestError`。
+  4. access log 由 Caddy 記；未捕捉錯誤由 `src/instrumentation.ts` 的 `onRequestError` 記成一行 JSON，帶 request id，不帶錯誤訊息。
   5. 請求主體上限用 `serverActions.bodySizeLimit`，回應不是 413 problem；慢速標頭攻擊交給 Caddy。
   6. 契約的唯一來源是 zod schema，不是 OpenAPI。
   7. 登入成功只清這次來源的計數（Go 全清，搭配它的帳號層級上限；這裡沒有上限，全清會讓本人每登入一次就重置攻擊者的退避）。
@@ -56,6 +56,7 @@ related-commits: [9eee0b0, b15744e, a0d6baa, 26acab2, dc20c63, 5ef66dc, 711887f,
 
 - 多實例或改上 Vercel → 節流移到資料庫（Go 版的節流表），D2、D3 一起重開。
 - 要帳號層級上限、鎖定或 trusted device → 照 Go 版帳號濫用 ADR 補做；那時登入成功的清除範圍（偏離 7）也要重看。
+- 清理過期 session 與節流計數的每小時計時器，在程序第一次用到認證時才啟動（`src/features/auth/server/runtime.ts`）：重啟後沒有任何認證請求時，過期 session 留在表裡，但它們已經不能用（讀取時檢查期限）。要讓沒有流量的程序也清理時，改在 `instrumentation.ts` 的 `register` 啟動。
 - 日誌出現 `auth.sign_in_throttle_full` → 評估帳號層級上限是否要提前。
 - 出現符合本 repo 規格、維護活躍的認證庫，且 Go 版也改用相同行為 → 重評 D1。
 

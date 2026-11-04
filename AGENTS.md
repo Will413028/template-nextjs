@@ -22,7 +22,6 @@ This repository is a template: `make new NAME=x DEST=<dir>` generates a project 
 ## Constraints
 
 - Tables are defined only in `src/features/<name>/schema.ts`; migrations come from `make generate-migration MSG=<name>` (drizzle-kit). Hand-written SQL only for a data backfill or lock-free steps squawk asks for (`docs/rules/database-design.md`). A migration merged into `main` never changes; add a new one.
-- drizzle-kit refuses to generate when no `schema.ts` exists yet; the first feature with tables adds one.
 - `make down-v` deletes the Postgres volume and all local data.
 - Never commit `.env` or `.secrets/`; add new variables to `.env-example`.
 - Agents do not add or upgrade dependencies on their own: list each package and version, confirm the package exists and was not registered recently (deps.dev shows publish dates), and wait for approval before installing.
@@ -36,7 +35,7 @@ This repository is a template: `make new NAME=x DEST=<dir>` generates a project 
 
 ```
 ├── src/
-│   ├── app/                  # routes: [locale]/ pages, api/health (the only Route Handler so far)
+│   ├── app/                  # routes: [locale]/ pages, api/health and api/session/expired (the only Route Handlers)
 │   ├── features/<name>/      # vertical slices: schema.ts, server/, actions.ts, components/
 │   ├── server/               # kernel: db.ts (app-role pool), env.ts (server configuration)
 │   ├── lib/                  # client-safe utilities (env.ts: NODE_ENV only)

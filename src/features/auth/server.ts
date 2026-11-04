@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import { cache } from "react";
+import { REQUEST_ID_HEADER } from "@/lib/request-id";
 import { withRequestId } from "./server/log";
 import {
   authService,
@@ -47,10 +48,6 @@ export async function requireSession(): Promise<Viewer> {
       : `/${locale}/sign-in`,
   );
 }
-
-// The header that carries the request's id: from Caddy to proxy.ts, from proxy.ts to rendering and actions, and back
-// to the client as X-Request-ID.
-export const REQUEST_ID_HEADER = "x-request-id";
 
 // A request id a proxy may set: it goes into log lines and a response header (Go middleware.go validRequestID).
 const VALID_REQUEST_ID = /^[A-Za-z0-9-]{1,64}$/;
