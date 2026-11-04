@@ -1,7 +1,9 @@
-# Python: the check scripts (scripts/) and the project generator (template/). make py-tools installs ruff.
+# Python: the check scripts in scripts/. make py-tools installs ruff.
 target-version = "py312"
-# docs/plans/ is frozen evidence (AGENTS.md), not code this repository checks
+# >>> template-only
+# also the project generator; the plan's spike sources are frozen evidence (AGENTS.md), not code this repository checks
 extend-exclude = ["docs/plans"]
+# <<< template-only
 line-length = 120
 
 [lint]
