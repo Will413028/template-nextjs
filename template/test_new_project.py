@@ -72,6 +72,12 @@ class GenerateTest(unittest.TestCase):
         os.umask(self.old_umask)
         self.tmp.cleanup()
 
+    def case(self, label: str) -> pathlib.Path:
+        """A fresh directory of its own for one subTest case."""
+        root = self.root / label
+        root.mkdir()
+        return root
+
     def generate(self, files=None, name="my-app", repo=None, dest=None):
         src = make_template(self.root, BASE_FILES if files is None else files)
         dest = dest or self.root / "out"
@@ -88,7 +94,7 @@ class GenerateTest(unittest.TestCase):
 
     def test_a_path_naming_the_template_writes_nothing(self):
         # file names are not rewritten: a name that would need it is refused instead of renamed
-        self.assert_refused_and_untouched(files={**BASE_FILES, f"{NAME}.txt": "named after the template\n"})
+        self.assert_refused_and_untouched("the path holds", files={**BASE_FILES, f"{NAME}.txt": "named after the template\n"})
 
     def test_a_repository_that_names_the_project_is_replaced_once(self):
         # sequential str.replace rewrote acme/<name>-fork a second time; one pass never rescans its output
@@ -125,31 +131,34 @@ class GenerateTest(unittest.TestCase):
         self.assertTrue(os.access(dest / "run.sh", os.X_OK))
         self.assertFalse(os.access(dest / "package.json", os.X_OK))
 
-    def assert_refused_and_untouched(self, files=None, name="my-app", repo=None, dest_setup=None):
-        dest = self.root / "out"
+    def assert_refused_and_untouched(self, error, files=None, name="my-app", repo=None, dest_setup=None, root=None):
+        """generate() fails with a message matching error (the check meant, not some other one) and writes nothing."""
+        root = root or self.root
+        dest = root / "out"
         if dest_setup:
             dest_setup(dest)
-        before = sorted(p.name for p in self.root.iterdir())
-        src = make_template(self.root, BASE_FILES if files is None else files)
-        with self.assertRaises(new_project.GenerateError):
+        before = sorted(p.name for p in root.iterdir())
+        src = make_template(root, BASE_FILES if files is None else files)
+        with self.assertRaisesRegex(new_project.GenerateError, error):
             new_project.generate(src, dest, name, repo or f"acme/{name}")
-        after = sorted(p.name for p in self.root.iterdir() if p.name != "src")
+        after = sorted(p.name for p in root.iterdir() if p.name != "src")
         self.assertEqual(after, before, "a refused run left files next to the template")
         if dest.exists():
             self.assertEqual(sorted(p.name for p in dest.iterdir()), ["keep"] if dest_setup else [])
 
     def test_output_still_naming_the_template_writes_nothing(self):
         # a capitalised form the table does not cover: the check runs before any file is written
-        self.assert_refused_and_untouched(files={**BASE_FILES, "notes.md": "TEMPLATE-NEXTJS\n"})
+        self.assert_refused_and_untouched("still contains 'TEMPLATE-NEXTJS'", files={**BASE_FILES, "notes.md": "TEMPLATE-NEXTJS\n"})
 
     def test_output_referring_to_the_generator_writes_nothing(self):
-        self.assert_refused_and_untouched(files={**BASE_FILES, "notes.md": "see template/new_project.py\n"})
+        self.assert_refused_and_untouched("still contains 'new_project.py'",
+                                          files={**BASE_FILES, "notes.md": "run python3 new_project.py\n"})
 
     def test_unbalanced_template_only_block_writes_nothing(self):
-        self.assert_refused_and_untouched(files={**BASE_FILES, "x.yml": "a\n# >>> template-only\nb\n"})
+        self.assert_refused_and_untouched("never closed", files={**BASE_FILES, "x.yml": "a\n# >>> template-only\nb\n"})
 
     def test_refuses_a_destination_that_is_not_empty(self):
-        self.assert_refused_and_untouched(dest_setup=lambda d: (d.mkdir(), (d / "keep").write_text("x")))
+        self.assert_refused_and_untouched("not an empty directory", dest_setup=lambda d: (d.mkdir(), (d / "keep").write_text("x")))
 
     def test_an_empty_destination_directory_is_used(self):
         dest = self.root / "out"
@@ -160,7 +169,7 @@ class GenerateTest(unittest.TestCase):
     def test_refuses_a_dirty_template(self):
         src = make_template(self.root, BASE_FILES)
         (src / "package.json").write_text("changed\n", encoding="utf-8")
-        with self.assertRaises(new_project.GenerateError):
+        with self.assertRaisesRegex(new_project.GenerateError, "uncommitted"):
             new_project.generate(src, self.root / "out", "my-app", "acme/my-app")
         self.assertFalse((self.root / "out").exists())
 
@@ -186,28 +195,73 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
 
     def test_output_referring_to_an_excluded_directory_writes_nothing(self):
-        for text in ("see `docs/plans/`\n", "see template/README.md\n", "[plan](../docs/plans/x.md)\n",
-                     "run ./template/x\n", "run make new NAME=x\n"):
-            with self.subTest(text=text):
-                self.tearDown()
-                self.setUp()
-                self.assert_refused_and_untouched(files={**BASE_FILES, "notes.md": text})
+        # (file, text, the reference reported); a relative path is resolved against the file that holds it
+        cases = (("notes.md", "see `docs/plans/`\n", "docs/plans"),
+                 ("notes.md", "see template/README.md\n", "template"),
+                 ("docs/notes.md", "[plan](../docs/plans/x.md)\n", "../docs/plans"),
+                 ("notes.md", "run ./template/x\n", "./template"),
+                 ("notes.md", "run make new NAME=x\n", "make new NAME="))
+        for number, (rel, text, ref) in enumerate(cases):
+            with self.subTest(rel=rel, text=text):
+                self.assert_refused_and_untouched(f"{rel}: .*{ref}", files={**BASE_FILES, rel: text},
+                                                  root=self.case(str(number)))
+
+    def test_a_binary_file_referring_to_an_excluded_directory_writes_nothing(self):
+        src = make_template(self.root, BASE_FILES)
+        (src / "logo.bin").write_bytes(b"\xff\xfe see docs/plans/x\n")
+        git(src, "add", "logo.bin")
+        git(src, "commit", "-q", "-m", "binary")
+        with self.assertRaisesRegex(new_project.GenerateError, "logo.bin: refers to the excluded 'docs/plans'"):
+            new_project.generate(src, self.root / "out", "my-app", "acme/my-app")
+        self.assertFalse((self.root / "out").exists())
+
+    def test_ordinary_text_and_unrelated_template_directories_are_allowed(self):
+        files = {**BASE_FILES,
+                 "src/mail/x.ts": 'import "./template/body";\n',  # src/mail/template/, which the output keeps
+                 "src/mail/template/body.ts": "export {};\n",
+                 "notes.md": "make new tables; the new_project table; ../template/ from the root leaves the tree\n"}
+        _, dest, _ = self.generate(files=files)
+        self.assertTrue((dest / "src/mail/template/body.ts").exists())
 
     def test_a_symlink_writes_nothing(self):
-        for target in ("/etc/hosts", "README.md"):  # leaving the tree, and inside it
+        # leaving the tree is stopped by the data filter while unpacking, a link inside it by the tree check
+        cases = (("/etc/hosts", "'link' is a link to an absolute path"), ("README.md", "link: a symbolic link"))
+        for number, (target, error) in enumerate(cases):
             with self.subTest(target=target):
-                self.tearDown()
-                self.setUp()
-                src = make_template(self.root, BASE_FILES)
+                root = self.case(str(number))
+                src = make_template(root, BASE_FILES)
                 (src / "link").symlink_to(target)
                 git(src, "add", "link")
                 git(src, "commit", "-q", "-m", "link")
-                with self.assertRaises(new_project.GenerateError):
-                    new_project.generate(src, self.root / "out", "my-app", "acme/my-app")
-                self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
+                with self.assertRaisesRegex(new_project.GenerateError, error):
+                    new_project.generate(src, root / "out", "my-app", "acme/my-app")
+                self.assertEqual(sorted(p.name for p in root.iterdir()), ["src"])
 
     def test_export_attributes_write_nothing(self):
-        self.assert_refused_and_untouched(files={**BASE_FILES, ".gitattributes": "SECURITY.md export-ignore\n"})
+        self.assert_refused_and_untouched(r"SECURITY\.md \(export-ignore\)",
+                                          files={**BASE_FILES, ".gitattributes": "SECURITY.md export-ignore\n"})
+
+    def test_export_attributes_outside_the_tree_write_nothing(self):
+        # .git/info/attributes and core.attributesFile reach git archive too
+        for number, where in enumerate(("info", "config")):
+            with self.subTest(where=where):
+                root = self.case(str(number))
+                src = make_template(root, BASE_FILES)
+                rules = root / "attributes"
+                rules.write_text("README.md export-subst\n", encoding="utf-8")
+                if where == "info":
+                    (src / ".git/info").mkdir(exist_ok=True)
+                    rules.replace(src / ".git/info/attributes")
+                else:
+                    git(src, "config", "core.attributesFile", str(rules))
+                with self.assertRaisesRegex(new_project.GenerateError, r"README\.md \(export-subst\)"):
+                    new_project.generate(src, root / "out", "my-app", "acme/my-app")
+                self.assertFalse((root / "out").exists())
+
+    def test_unset_and_commented_export_attributes_are_allowed(self):
+        attributes = "# SECURITY.md export-ignore\nSECURITY.md -export-ignore\n*.bin export-ignore\n"
+        _, dest, _ = self.generate(files={**BASE_FILES, ".gitattributes": attributes})
+        self.assertTrue((dest / "SECURITY.md").exists())
 
     def test_a_derived_file_keeps_its_mode_and_may_add_a_directory(self):
         files = {**BASE_FILES, "template/derived/bin/run.sh": "#!/bin/sh\n"}
@@ -230,14 +284,10 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["out", "src"])
         self.assertEqual(list(dest.iterdir()), [])
 
-    def test_other_paths_under_a_template_directory_are_allowed(self):
-        _, dest, _ = self.generate(files={**BASE_FILES, "src/mail/template/x.ts": 'import "./body";\n'})
-        self.assertTrue((dest / "src/mail/template/x.ts").exists())
-
     def test_an_old_python_is_an_error_message(self):
         # tarfile's extraction filters came with Python 3.12 (and late 3.8-3.11 patch releases)
         with mock.patch.object(new_project, "tarfile", object()), \
-                self.assertRaisesRegex(new_project.GenerateError, "3.12"):
+                self.assertRaisesRegex(new_project.GenerateError, r"3\.12\+, 3\.11\.4\+"):
             new_project.generate(make_template(self.root, BASE_FILES), self.root / "out", "my-app", "acme/my-app")
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["src"])
 
@@ -248,7 +298,7 @@ class GenerateTest(unittest.TestCase):
         for name, repo in (("My-App", "acme/x"), ("my_app", "acme/x"), ("1app", "acme/x"), (NAME, "acme/x"),
                            ("a" * 58, "acme/x"), ("my-app", "acme"), ("my-app", "acme/x/y"), ("my-app", "acme/x y")):
             with self.subTest(name=name, repo=repo):
-                with self.assertRaises(new_project.GenerateError):
+                with self.assertRaisesRegex(new_project.GenerateError, "invalid|longer|other than"):
                     new_project.check_arguments(name, repo)
 
 
