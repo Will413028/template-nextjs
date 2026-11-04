@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clientIP, parsePrefix } from "../client-ip";
+import { clientIP, isTrusted, parsePrefix } from "../client-ip";
 
 // template-go-nextjs middleware_test.go TestClientIP, same table (proxies 172.30.0.0/24)
 describe("clientIP", () => {
@@ -55,4 +55,15 @@ describe("clientIP", () => {
       expect(() => parsePrefix(prefix)).toThrow("not an address prefix");
     },
   );
+});
+
+describe("isTrusted", () => {
+  const trusted = [parsePrefix("172.30.0.0/24")];
+  it.each([
+    ["172.30.0.2", true],
+    ["172.31.0.2", false],
+    ["not an address", false],
+  ])("%s: %s", (ip, expected) => {
+    expect(isTrusted(ip, trusted)).toBe(expected);
+  });
 });
