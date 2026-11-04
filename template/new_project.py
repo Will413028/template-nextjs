@@ -53,7 +53,7 @@ FORBIDDEN = re.compile(
 # A path ending in an excluded directory's name, at a path boundary, with any leading ./ and ../ (checked by resolving it
 # against the referring file: src/mail/x.ts's ./template/ is src/mail/template/, which the output keeps).
 PATH_REF = re.compile(
-    r"(?<![\w.-])((?:\.\.?/)*)("
+    r"(?<![\w./@-])((?:\.\.?/)*)("
     # template/ needs its slash (the word alone is ordinary text); docs/plans is a path either way
     + "|".join(re.escape(prefix) if "/" not in prefix.rstrip("/") else re.escape(prefix.rstrip("/")) + r"(?![\w.-])"
                for prefix in EXCLUDED)
@@ -119,7 +119,8 @@ def check_export_attributes(top: pathlib.Path, sha: str) -> None:
     """Refuse when any attribute source git archive reads (the tree's .gitattributes, .git/info/attributes,
     core.attributesFile) sets an export attribute on an exported path."""
     paths = [p for p in run_git(top, "ls-tree", "-r", "-z", "--name-only", sha).split(b"\0")
-             if p and not p.decode().startswith(EXPORTED_EXCLUDED)]
+             # template/ outside derived/ is dropped after the export: its attributes cannot change the output
+             if p and (p.decode().startswith(DERIVED) or not p.decode().startswith(EXCLUDED))]
     if not paths:
         return
     fields = run_git(top, "check-attr", "-z", "--stdin", "--source", sha, *EXPORT_ATTRIBUTES,

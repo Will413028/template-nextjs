@@ -219,6 +219,7 @@ class GenerateTest(unittest.TestCase):
         files = {**BASE_FILES,
                  "src/mail/x.ts": 'import "./template/body";\n',  # src/mail/template/, which the output keeps
                  "src/mail/template/body.ts": "export {};\n",
+                 "src/mail/y.ts": 'import "./emails/template/a"; import "@/template/b"; // src/docs/plans/c\n',
                  "notes.md": "make new tables; the new_project table; ../template/ from the root leaves the tree\n"}
         _, dest, _ = self.generate(files=files)
         self.assertTrue((dest / "src/mail/template/body.ts").exists())
@@ -258,9 +259,15 @@ class GenerateTest(unittest.TestCase):
                     new_project.generate(src, root / "out", "my-app", "acme/my-app")
                 self.assertFalse((root / "out").exists())
 
+    def test_export_attributes_on_a_derived_file_write_nothing(self):
+        self.assert_refused_and_untouched(r"template/derived/README\.md \(export-ignore\)",
+                                          files={**BASE_FILES, "template/.gitattributes": "derived/** export-ignore\n"})
+
     def test_unset_and_commented_export_attributes_are_allowed(self):
         attributes = "# SECURITY.md export-ignore\nSECURITY.md -export-ignore\n*.bin export-ignore\n"
-        _, dest, _ = self.generate(files={**BASE_FILES, ".gitattributes": attributes})
+        # template/ outside derived/ is dropped after the export, so its attributes cannot change the output
+        _, dest, _ = self.generate(files={**BASE_FILES, ".gitattributes": attributes,
+                                          "template/.gitattributes": "new_project.py export-ignore\n"})
         self.assertTrue((dest / "SECURITY.md").exists())
 
     def test_a_derived_file_keeps_its_mode_and_may_add_a_directory(self):
