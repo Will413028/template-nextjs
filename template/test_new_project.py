@@ -34,7 +34,12 @@ GIT_ENV = {
 def git(cwd: pathlib.Path, *args: str) -> str:
     # never the GIT_DIR a hook running these tests exports: it would point the commands at the real repository
     return subprocess.run(
-        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True, env={**{k: v for k, v in os.environ.items() if not k.startswith("GIT_")}, **GIT_ENV}
+        ["git", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**{k: v for k, v in os.environ.items() if not k.startswith("GIT_")}, **GIT_ENV},
     ).stdout
 
 
@@ -97,7 +102,12 @@ class GenerateTest(unittest.TestCase):
         outer.mkdir()
         git(outer, "init", "-q", "-b", "dev")
         git(outer, "commit", "-q", "--allow-empty", "-m", "outer")
-        hook_env = {"GIT_DIR": str(outer / ".git"), "GIT_INDEX_FILE": str(outer / ".git/index")}
+        hook_env = {
+            "GIT_DIR": str(outer / ".git"),
+            "GIT_INDEX_FILE": str(outer / ".git/index"),
+            "GIT_WORK_TREE": str(outer),
+            "GIT_COMMON_DIR": str(outer / ".git"),
+        }
         src = make_template(self.root, BASE_FILES)
         with mock.patch.dict(os.environ, hook_env):
             new_project.generate(src, self.root / "out", "my-app", "acme/my-app")
