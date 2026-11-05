@@ -268,8 +268,8 @@ describe("the session cookie", () => {
 });
 
 describe("cross-origin protection", () => {
-  // Go server_test.go TestCrossOriginPostRejected, plus the cases step 0 (a) added. "executed" is whether the sign-up
-  // happened: a cookie was set. The status is not the assertion: a refused action can still answer 200.
+  // Go server_test.go TestCrossOriginPostRejected, plus the cases the initial spikes added. "executed" is whether the
+  // sign-up happened: a cookie was set. The status is not the assertion: a refused action can still answer 200.
   const cases: [string, (host: string) => Record<string, string>, boolean][] = [
     ["cross-site", () => ({ "Sec-Fetch-Site": "cross-site" }), false],
     ["same-site sibling", () => ({ "Sec-Fetch-Site": "same-site" }), false],
@@ -290,7 +290,8 @@ describe("cross-origin protection", () => {
       () => ({ Origin: "https://evil.test", "X-Forwarded-Host": "evil.test" }),
       false,
     ],
-    // no browser sends this; it shows Next.js's own Origin check behind the proxy's (plan D2 deviation 1)
+    // no browser sends this; it shows Next.js's own Origin check behind the proxy's
+    // (ADR auth-and-sign-in-throttling D1, deviation 1)
     [
       "Sec-Fetch-Site same-origin with a foreign Origin",
       () => ({ Origin: "https://evil.test", "Sec-Fetch-Site": "same-origin" }),

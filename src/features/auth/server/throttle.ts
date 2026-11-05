@@ -1,6 +1,7 @@
 import "server-only";
 
-// Sign-in throttling kept in process memory (plan D7=A): it holds while the app runs as a single instance (D5=A);
+// Sign-in throttling kept in process memory (ADR auth-and-sign-in-throttling D2): it holds while the app runs as
+// a single instance (ADR nextjs-fullstack-baseline D4);
 // more instances multiply the limits, and a restart forgets every count. Both parts are synchronous, so within one
 // Node.js event loop a check and its count cannot interleave with another request: the atomicity template-go-nextjs
 // gets from one SQL UPSERT.
@@ -64,7 +65,7 @@ export class IPLimiter {
 // How long a pair's count is kept after its last attempt; the longest wait is an hour.
 const KEEP_FOR = 24 * 60 * MINUTE;
 
-// At most this many pairs are counted (plan D9=D; memory measured in the plan). Without a cap an attacker with many
+// At most this many pairs are counted (ADR auth-and-sign-in-throttling D3). Without a cap an attacker with many
 // sources grows the counts without bound (one source adds up to 7,204 pairs a day at 5 sign-ins a minute; an IPv6 /48
 // holds 65,536 /64 sources).
 const MAX_ENTRIES = 100_000;
@@ -87,7 +88,7 @@ export type SignInThrottleOptions = {
   onFull?: (uncounted: number) => void;
 };
 
-// Exponential backoff per username and source (template-go-nextjs ADR account-abuse-and-lifecycle D4a): each source
+// Exponential backoff per username and source (template-go-nextjs's account abuse ADR): each source
 // has its own count, so one client's failures do not lock out another. The attempt is counted before the password is
 // checked, so requests sent together cannot all pass a wait that is not recorded yet. From the 5th consecutive
 // failure the next attempt waits 2^(n-5) minutes, at most an hour. A successful sign-in clears its source's count.
@@ -97,7 +98,7 @@ export type SignInThrottleOptions = {
 // resets at most 4 free attempts (a source can have its own pairs evicted over and over, which the per-IP limit still
 // bounds). When every pair has reached its backoff, a new pair's attempt goes ahead uncounted and onFull is called:
 // until the sweep frees room, each source not counted yet gets the per-IP limit's 5 attempts a minute at a username
-// instead of 4 and a wait (plan D9).
+// instead of 4 and a wait (ADR auth-and-sign-in-throttling D3).
 export class SignInThrottle {
   // Keyed by source and username (a source has no spaces).
   private readonly partial = new Map<string, Partial>();
@@ -151,7 +152,7 @@ export class SignInThrottle {
 
   // Clears only the source that signed in: clearing the username's every source would let the owner's own sign-ins
   // reset an attacker's backoff (template-go-nextjs clears them all, alongside an account-wide cap this step defers;
-  // plan D2 deviation 11).
+  // ADR auth-and-sign-in-throttling D1, deviation 7).
   succeeded(username: string, source: string): void {
     const key = `${source} ${username}`;
     this.removePartial(key);

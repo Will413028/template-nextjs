@@ -62,7 +62,8 @@ describe("SignInThrottle", () => {
     expect(throttle.reserve("alice", "198.51.100.7")).toBe(0);
   });
 
-  // plan D9=D: an attacker with many sources (an IPv6 /48 has 65,536 /64s) must not grow the counts without bound
+  // ADR auth-and-sign-in-throttling D3: an attacker with many sources (an IPv6 /48 has 65,536 /64s) must not grow the
+  // counts without bound
   it("keeps at most maxEntries counts, evicting the least recently counted pair with fewer than 5 failures", () => {
     let now = 0;
     const throttle = new SignInThrottle(() => now, { maxEntries: 3 });

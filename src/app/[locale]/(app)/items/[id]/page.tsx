@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // One of the viewer's items, to change or delete. Another user's item, a deleted one and an id that is no UUID are
-// all a page that does not exist (ADR api-and-auth-baseline D7a).
+// all a page that does not exist (the Go template's API and auth ADR).
 export default async function ItemPage({
   params,
 }: {

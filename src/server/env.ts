@@ -57,7 +57,7 @@ export function connectionFields(url: string) {
 
 const proxyEnv = z.object({
   // the proxies whose X-Forwarded-For and X-Request-ID are believed: Caddy's fixed address in docker-compose.yml
-  // (ADR api-and-auth D1)
+  // (ADR auth-and-sign-in-throttling D1, deviation 2)
   TRUSTED_PROXIES: z.string().default(""),
 });
 

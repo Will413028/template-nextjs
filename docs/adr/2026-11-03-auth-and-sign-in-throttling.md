@@ -63,4 +63,4 @@ related-commits: [9eee0b0, b15744e, a0d6baa, 26acab2, dc20c63, 5ef66dc, 711887f,
 ## Related
 
 - [全端基準](2026-11-03-nextjs-fullstack-baseline.md)
-- 規格：template-go-nextjs `docs/adr/2026-10-18-api-and-auth-baseline.md`、`docs/adr/2026-10-22-account-abuse-and-lifecycle.md`（[GitHub](https://github.com/Will413028/template-go-nextjs/tree/dev/docs/adr)）。
+- 規格：template-go-nextjs 的 API 與認證基準 ADR、帳號濫用與生命週期 ADR（[GitHub](https://github.com/Will413028/template-go-nextjs/tree/dev/docs/adr)）。

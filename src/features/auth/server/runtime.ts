@@ -62,7 +62,7 @@ export async function sessionToken(): Promise<string | undefined> {
   return (await cookies()).get(SESSION_COOKIE)?.value || undefined;
 }
 
-// ADR api-and-auth D4: __Host- (Secure, Path=/, no Domain), HttpOnly, SameSite=Lax.
+// As in the Go template's API and auth ADR: __Host- (Secure, Path=/, no Domain), HttpOnly, SameSite=Lax.
 const cookieOptions = {
   httpOnly: true,
   secure: true,

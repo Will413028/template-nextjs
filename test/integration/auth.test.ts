@@ -23,7 +23,7 @@ import {
 
 // The auth service against PostgreSQL as the app role, ported from template-go-nextjs httpapi/auth_test.go,
 // auth_resources_test.go, throttle_test.go and modules/auth/service_test.go, schema_test.go. Cookies, actions and
-// per-IP limits are step 2b.
+// per-IP limits are tested in actions.test.ts.
 
 let database: TestDatabase;
 let db: Database;

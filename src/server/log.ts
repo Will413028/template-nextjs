@@ -1,10 +1,10 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-// One line of JSON per security event (ADR account-abuse-and-lifecycle D2b), with the id of the request that caused
-// it (Go logx.WithRequestID): the same id is the response's X-Request-ID, which Caddy's access log records. Never pass
-// a password, a token or a submitted username that matched no account: it can be a password typed into the wrong
-// field.
+// One line of JSON per security event (as in the Go template's account abuse ADR), with the id of the request that
+// caused it (Go logx.WithRequestID): the same id is the response's X-Request-ID, which Caddy's access log records.
+// Never pass a password, a token or a submitted username that matched no account: it can be a password typed into the
+// wrong field.
 
 export type SecurityLog = (
   event: string,

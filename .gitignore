@@ -7,7 +7,7 @@ AGENTS.local.md
 !.env-example
 .secrets/
 # >>> template-only
-# Throwaway passwords the step 0 spikes generated
+# Throwaway passwords the plan's spikes generated
 docs/plans/**/secrets/
 # <<< template-only
 

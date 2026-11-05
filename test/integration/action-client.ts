@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
-// A Server Action client without a browser (plan step 0 (a) §7): action ids from the build's manifest, a POST the
-// way React's client sends one, cookies carried by hand, the action's result decoded from the RSC response.
+// A Server Action client without a browser (as the initial spikes built it): action ids from the build's manifest, a
+// POST the way React's client sends one, cookies carried by hand, the action's result decoded from the RSC response.
 
 type Manifest = {
   node: Record<

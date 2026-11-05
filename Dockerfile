@@ -54,8 +54,8 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-# Records each request's TCP peer before Next.js runs (peer.cjs; plan D2 deviation 3); the app refuses sign-up and
-# sign-in without it.
+# Records each request's TCP peer before Next.js runs (peer.cjs; ADR auth-and-sign-in-throttling D1, deviation 2); the
+# app refuses sign-up and sign-in without it.
 COPY --from=builder /app/peer.cjs ./peer.cjs
 ENV NODE_OPTIONS="--require=/app/peer.cjs"
 

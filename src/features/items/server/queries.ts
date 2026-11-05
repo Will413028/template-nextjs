@@ -13,8 +13,8 @@ import { items } from "../schema";
 import { decodeCursor, encodeCursor } from "./cursor";
 
 // The items feature's data access, ported from template-go-nextjs modules/items (560106d). Every function takes the
-// viewer first and every query is scoped to it (ADR api-and-auth-baseline D7a, plan D8): another user's item is not
-// found, the same as one that does not exist, so an id reveals nothing about other users' data.
+// viewer first and every query is scoped to it (ADR nextjs-fullstack-baseline D5; as in the Go template): another
+// user's item is not found, the same as one that does not exist, so an id reveals nothing about other users' data.
 
 export type Item = typeof items.$inferSelect;
 

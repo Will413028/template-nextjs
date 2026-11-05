@@ -27,10 +27,10 @@ export function cspFor(nonce: string): string {
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-// Go's http.CrossOriginProtection (ADR api-and-auth D5; plan D2 deviation 1): Sec-Fetch-Site decides when a browser
-// sends it; otherwise the Origin's host must equal Host. Never X-Forwarded-Host: Next.js believes it from any client
-// that reaches it directly (step 0 (a) §3). A request with neither header is not from a browser, so it carries no
-// victim's cookie, and passes. Next.js's own Origin check on Server Actions stays as a second layer.
+// Go's http.CrossOriginProtection (ADR auth-and-sign-in-throttling D1, deviation 1): Sec-Fetch-Site decides when a
+// browser sends it; otherwise the Origin's host must equal Host. Never X-Forwarded-Host: Next.js believes it from any
+// client that reaches it directly (the initial spikes checked). A request with neither header is not from a browser, so
+// it carries no victim's cookie, and passes. Next.js's own Origin check on Server Actions stays as a second layer.
 export function crossOrigin(request: Request): boolean {
   if (SAFE_METHODS.has(request.method)) return false;
   const site = request.headers.get("sec-fetch-site");
@@ -82,6 +82,6 @@ function route(request: NextRequest, requestId: string): NextResponse {
 
 export const config = {
   // Every path but the build's static files: a Server Action can be posted to any path, one that does not exist
-  // included (step 0 (a) §4), so the cross-origin check cannot be limited to pages.
+  // included (the initial spikes checked), so the cross-origin check cannot be limited to pages.
   matcher: ["/((?!_next/static|_next/image).*)"],
 };

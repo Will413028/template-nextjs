@@ -2,9 +2,9 @@ import { randomBytes } from "node:crypto";
 import { expect } from "vitest";
 import { actionId, callAction } from "./action-client";
 
-// What a user does from the first visit to signing out (plan step 2 acceptance), without a browser: Server Actions
-// posted the way React posts them, pages fetched, cookies kept the way a browser keeps them. pages.test.ts runs it
-// against `next start`; CI's stack job runs test/stack/flow.test.ts against the compose stack through Caddy.
+// What a user does from the first visit to signing out (the auth and items acceptance path), without a browser: Server
+// Actions posted the way React posts them, pages fetched, cookies kept the way a browser keeps them. pages.test.ts runs
+// it against `next start`; CI's stack job runs test/stack/flow.test.ts against the compose stack through Caddy.
 
 const SESSION = "__Host-session";
 

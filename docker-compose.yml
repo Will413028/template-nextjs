@@ -70,7 +70,7 @@ services:
       DATABASE_PASSWORD_FILE: /run/secrets/db_app_password
       DB_MAX_CONNS: ${DB_MAX_CONNS:-}
       DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-}
-      # caddy's fixed address: only it may set X-Forwarded-For (ADR api-and-auth D1)
+      # caddy's fixed address: only it may set X-Forwarded-For (ADR auth-and-sign-in-throttling D1, deviation 2)
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.29.0.2/32}
       AUTH_RATE_LIMIT_PER_MIN: ${AUTH_RATE_LIMIT_PER_MIN:-}
     secrets: [db_app_password]

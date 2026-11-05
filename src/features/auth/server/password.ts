@@ -8,7 +8,7 @@ import {
   verify as argon2Verify,
 } from "@node-rs/argon2";
 
-// Password storage (docs/adr/2026-10-18-api-and-auth-baseline.md D6 in template-go-nextjs; NIST SP 800-63B-4,
+// Password storage (the Go template's API and auth ADR; NIST SP 800-63B-4,
 // OWASP Password Storage Cheat Sheet).
 
 // NFKC is applied before a password is checked against the list or hashed, so the same password typed with

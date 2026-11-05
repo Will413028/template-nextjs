@@ -8,7 +8,7 @@ import {
   setSessionCookie,
 } from "./server/runtime";
 
-// The auth feature's Server Actions. Each is a public POST endpoint (plan step 0 (a) §4), so each is wrapped:
+// The auth feature's Server Actions. Each is a public POST endpoint, reachable from any path, so each is wrapped:
 // authedAction checks the session first, publicAction the per-IP limit (server-actions.test.ts). The token goes into
 // the cookie only and is never part of a result. The signatures fit useActionState: (previous state, form input).
 

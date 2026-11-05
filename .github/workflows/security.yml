@@ -59,7 +59,7 @@ jobs:
       - uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
         with:
           # >>> template-only
-          # the step 0 spike lockfiles under docs/plans/ are a frozen record that nothing installs
+          # the spike lockfiles under docs/plans/ are a frozen record that nothing installs
           # <<< template-only
           scan-args: -L pnpm-lock.yaml
 

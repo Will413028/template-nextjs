@@ -1,10 +1,10 @@
 import "server-only";
 import { isIP } from "node:net";
 
-// The client's address behind trusted proxies, ported from template-go-nextjs middleware.go trust.clientIP: the
-// peer, unless the peer is a trusted proxy; then the first X-Forwarded-For hop from the right that is not trusted.
-// A hop that does not parse stops the walk at the last address known to be real. The peer comes from the preload
-// that records the TCP peer before Next.js runs (plan D2 deviation 3, step 2b); Next.js itself only passes headers.
+// The client's address behind trusted proxies, ported from template-go-nextjs middleware.go trust.clientIP: the peer,
+// unless the peer is a trusted proxy; then the first X-Forwarded-For hop from the right that is not trusted. A hop that
+// does not parse stops the walk at the last address known to be real. The peer comes from the preload that records the
+// TCP peer before Next.js runs (ADR auth-and-sign-in-throttling D1, deviation 2); Next.js itself only passes headers.
 
 type Address = { n: bigint; v6: boolean };
 export type Prefix = { address: bigint; bits: number; v6: boolean };

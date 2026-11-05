@@ -329,7 +329,8 @@ describe("the items pages", () => {
     ).toBe("/en/sign-in");
   });
 
-  // CSRF (ADR api-and-auth-baseline D5): a cross-site request is refused before the action runs (src/proxy.ts).
+  // CSRF (ADR auth-and-sign-in-throttling D1, deviation 1): a cross-site request is refused before the action runs
+  // (src/proxy.ts).
   it("does not create an item from a cross-site request", async () => {
     const user = await signedIn();
     const title = `csrf ${hex()}`;

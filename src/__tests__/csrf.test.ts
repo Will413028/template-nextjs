@@ -2,10 +2,11 @@ import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import proxy, { config } from "../proxy";
 
-// Cross-origin protection in the proxy (plan D2 deviation 1), ported from template-go-nextjs server_test.go
-// TestCrossOriginPostRejected: Go's http.CrossOriginProtection order. Sec-Fetch-Site decides when present; without
-// it, the Origin's host must equal Host (never X-Forwarded-Host, which a client can send straight to Next.js); a
-// request with neither is a non-browser client and passes. Next.js's own Origin check stays as a second layer.
+// Cross-origin protection in the proxy (ADR auth-and-sign-in-throttling D1, deviation 1), ported from
+// template-go-nextjs server_test.go TestCrossOriginPostRejected: Go's http.CrossOriginProtection order. Sec-Fetch-Site
+// decides when present; without it, the Origin's host must equal Host (never X-Forwarded-Host, which a client can send
+// straight to Next.js); a request with neither is a non-browser client and passes. Next.js's own Origin check stays as
+// a second layer.
 function post(path: string, headers: Record<string, string>) {
   return proxy(
     new NextRequest(`http://app.test${path}`, {
@@ -29,7 +30,7 @@ describe("cross-origin protection", () => {
     ],
     ["same-origin", { "sec-fetch-site": "same-origin" }, false],
     ["non-browser client", {}, false],
-    // added in step 0 (a)
+    // added by the initial spikes
     [
       "browser cross-site",
       { origin: "https://evil.test", "sec-fetch-site": "cross-site" },

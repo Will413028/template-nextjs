@@ -19,8 +19,8 @@ import {
 } from "./password";
 import { type Clock, SignInThrottle } from "./throttle";
 
-// Accounts and opaque sessions, ported from template-go-nextjs modules/auth (ADR api-and-auth-baseline D4, D6;
-// account-abuse-and-lifecycle D3, D4a). Cookies, actions and per-IP limits live in the action layer (step 2b).
+// Accounts and opaque sessions, ported from template-go-nextjs modules/auth (its API and auth ADR, its account
+// abuse ADR). Cookies, actions and per-IP limits live in the action layer (actions.ts, server.ts).
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -34,8 +34,9 @@ const SESSION_LIST_LIMIT = 100;
 
 declare const viewerBrand: unique symbol;
 
-// Who is calling: made only by authenticate() from a live session, so a function that takes a Viewer cannot be
-// called with an id the caller made up. Every query of user data takes it first and filters by userId (plan D8).
+// Who is calling: made only by authenticate() from a live session, so a function that takes a Viewer cannot be called
+// with an id the caller made up. Every query of user data takes it first and filters by userId
+// (ADR nextjs-fullstack-baseline D5).
 export type Viewer = {
   readonly userId: string;
   readonly username: string;
@@ -380,7 +381,7 @@ export function createAuthService(options: AuthServiceOptions) {
       return { ok: true };
     },
 
-    // Deletes expired sessions and forgets sign-in counts untouched for a day; the server runs it hourly (step 2b).
+    // Deletes expired sessions and forgets sign-in counts untouched for a day; the server runs it hourly.
     async cleanup(): Promise<{ sessions: number; throttles: number }> {
       const at = now();
       const deleted = await db

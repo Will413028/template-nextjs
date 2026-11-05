@@ -15,8 +15,9 @@ export async function register(): Promise<void> {
 }
 
 // An error no page, action or route caught: one line of JSON, in the shape of the security log, with the id the proxy
-// gave the request, so the line can be matched with Caddy's access log (auth ADR D1, deviation 4). The error's message
-// and stack stay out: they can hold submitted values; Next.js prints the stack to stderr itself.
+// gave the request, so the line can be matched with Caddy's access log
+// (ADR auth-and-sign-in-throttling D1, deviation 4). The error's message and stack stay out: they can hold submitted
+// values; Next.js prints the stack to stderr itself.
 export const onRequestError: Instrumentation.onRequestError = (
   error,
   request,

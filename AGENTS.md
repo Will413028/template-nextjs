@@ -28,7 +28,7 @@ This repository is a template: `make new NAME=x DEST=<dir>` generates a project 
 - Fix known vulnerabilities (`osv-scanner` over `pnpm-lock.yaml`, `pnpm audit`, Dependabot alerts; the Security workflow rescans the default branch `dev`, which contains all of `main`, every Monday) by severity: critical within 7 days, high within 30 days, medium within 90 days, low at the next routine upgrade. osv-scanner blocks any finding; an advisory that cannot be fixed at once goes into an `osv-scanner.toml` next to the lockfile as `[[IgnoredVulns]]` with `ignoreUntil` set to its deadline and a `reason`, so the scan fails again when the deadline passes.
 - `cacheComponents` stays off: a prerendered shell carries scripts without the request's CSP nonce and the page never hydrates. Turning it on needs a decision on the CSP first.
 <!-- >>> template-only -->
-- `docs/plans/` is the plan and its step 0 spike record: the spike sources there are frozen evidence, not code this repository builds, lints or scans.
+- `docs/plans/` is the plan and its spike record: the spike sources there are frozen evidence, not code this repository builds, lints or scans.
 <!-- <<< template-only -->
 
 ## Structure

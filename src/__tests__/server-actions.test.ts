@@ -3,10 +3,10 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// Every Server Action is a public POST endpoint, reachable by its id from any path (plan step 0 (a) §4), so a page's
-// own session check never covers it. These rules keep each action behind authedAction (a live session first) or, for
-// the two operations a visitor without an account needs, publicAction (the per-IP limit first). The integration test
-// test/integration/actions.test.ts calls every action of the build without a cookie.
+// Every Server Action is a public POST endpoint, reachable by its id from any path (the initial spikes found), so a
+// page's own session check never covers it. These rules keep each action behind authedAction (a live session first) or,
+// for the two operations a visitor without an account needs, publicAction (the per-IP limit first). The integration
+// test test/integration/actions.test.ts calls every action of the build without a cookie.
 const SRC = fileURLToPath(new URL("..", import.meta.url));
 
 function files(dir: string): string[] {

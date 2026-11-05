@@ -8,8 +8,9 @@ import { trustedProxyConfig } from "./env";
 // Who sent the request, for every feature: the client's address behind trusted proxies and the request's id. Both
 // believe a header only from a trusted proxy, so they share the TRUSTED_PROXIES list (Go: the middleware package).
 
-// Written by peer.cjs, the preload that records the TCP peer before Next.js runs (plan D2 deviation 3); it overwrites
-// any value a client sends. peer.test.ts checks the two names match.
+// Written by peer.cjs, the preload that records the TCP peer before Next.js runs
+// (ADR auth-and-sign-in-throttling D1, deviation 2); it overwrites any value a client sends. peer.test.ts checks the
+// two names match.
 export const PEER_HEADER = "x-peer-address";
 
 // On globalThis: Next.js may bundle this module into more than one server chunk.

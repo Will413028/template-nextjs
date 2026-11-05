@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-// The sign-up and sign-in input rules, the one source for the forms and the server (plan D2 deviation 9: zod
-// instead of OpenAPI). Lengths count code points, as template-go-nextjs's contract does. users_username_check in
-// schema.ts is the database's copy of the username rule.
+// The sign-up and sign-in input rules, the one source for the forms and the server
+// (ADR auth-and-sign-in-throttling D1, deviation 6: zod instead of OpenAPI). Lengths count code points, as
+// template-go-nextjs's contract does. users_username_check in schema.ts is the database's copy of the username rule.
 
 const codePoints = (s: string) => [...s].length;
 
@@ -33,7 +33,7 @@ export const signUpInput = z.object({
   ),
   // NIST SP 800-63B-4: 15 or more, no composition rules; the common-password check runs on the server. The minimum
   // counts the NFKC form the server hashes, which can be shorter than what was typed; the maximum counts the input
-  // (plan D2 deviation 12; template-go-nextjs counts the input for both).
+  // (ADR auth-and-sign-in-throttling D1, deviation 8; template-go-nextjs counts the input for both).
   password: z
     .string()
     .refine((s) => codePoints(s.normalize("NFKC")) >= 15, issue("too_short"))

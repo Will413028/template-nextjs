@@ -14,9 +14,9 @@ import {
 } from "./server/runtime";
 import type { Viewer } from "./server/service";
 
-// The auth feature's server boundary for the rest of the app (plan D8): every Server Action is made with authedAction
-// or publicAction (src/__tests__/server-actions.test.ts), and every page or query of user data starts from a Viewer,
-// which only a live session yields.
+// The auth feature's server boundary for the rest of the app (ADR nextjs-fullstack-baseline D5): every Server Action is
+// made with authedAction or publicAction (src/__tests__/server-actions.test.ts), and every page or query of user data
+// starts from a Viewer, which only a live session yields.
 
 export type { Viewer };
 
@@ -35,7 +35,8 @@ const currentViewer = cache(
 );
 
 // For pages and layouts (server components): the viewer, or a redirect to sign in. A component cannot write cookies
-// while it renders, so a dead cookie goes through the Route Handler that clears it (plan D2 deviation 5, D3).
+// while it renders, so a dead cookie goes through the Route Handler that clears it
+// (ADR auth-and-sign-in-throttling D1, deviation 3).
 export async function requireSession(): Promise<Viewer> {
   const viewer = await currentViewer();
   if (viewer) return viewer;
@@ -78,7 +79,7 @@ export type Client = {
 };
 
 // A Server Action open to visitors without a session: only sign-up and sign-in (server-actions.test.ts). The per-IP
-// limit (ADR api-and-auth D6c, AUTH_RATE_LIMIT_PER_MIN) applies before the action runs.
+// limit (ADR auth-and-sign-in-throttling D2, AUTH_RATE_LIMIT_PER_MIN) applies before the action runs.
 export function publicAction<Args extends unknown[], Result>(
   action: (client: Client, ...args: Args) => Promise<Result>,
 ): (...args: Args) => Promise<Result | RateLimited> {
