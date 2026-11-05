@@ -34,6 +34,7 @@ pre-push:
     policy:
       run: >-
         python3 -m unittest discover -s scripts -p 'test_*.py' &&
+        python3 scripts/check_doc_refs.py &&
         if git rev-parse -q --verify origin/main > /dev/null; then range=origin/main..HEAD; else range=HEAD; fi &&
         python3 scripts/check_commit_policy.py --range "$range"
     # >>> template-only
@@ -44,7 +45,7 @@ pre-push:
     # osv-scanner gets each tracked lockfile by name: its recursive walk honours a parent repository's .gitignore,
     # so a clone nested in an ignored directory would scan nothing and fail.
     # >>> template-only
-    # The step 0 spike lockfiles under docs/plans/ are a frozen record that nothing installs, so they are not scanned.
+    # The spike lockfiles under docs/plans/ are a frozen record that nothing installs, so they are not scanned.
     # <<< template-only
     security:
       run: >-

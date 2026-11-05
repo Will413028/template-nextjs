@@ -80,6 +80,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      # every decision or step label names a document the project holds, and that document defines it
+      - run: python3 scripts/check_doc_refs.py
       - name: Check the commits being added
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
