@@ -29,7 +29,7 @@
   "dependencies": {
     "@node-rs/argon2": "~2.2.2",
     "drizzle-orm": "~0.45.4",
-    "next": "^16.4.3",
+    "next": "^16.4.4",
     "next-intl": "^4.14.9",
     "pg": "^8.23.1",
     "react": "^19.3.1",
@@ -39,14 +39,14 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.4",
-    "@tailwindcss/postcss": "^4.3.3",
+    "@tailwindcss/postcss": "^4.3.4",
     "@testcontainers/postgresql": "^12.2.1",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitest/coverage-v8": "5.0.5",
-    "dependency-cruiser": "^18.7.1",
+    "@vitest/coverage-v8": "5.1.0",
+    "dependency-cruiser": "^18.7.2",
     "drizzle-kit": "~0.31.11",
     "fast-check": "4.10.2",
     "knip": "^6.44.1",
@@ -54,8 +54,8 @@
     "postcss": "^8.5.32",
     "pyright": "1.1.414",
     "squawk-cli": "2.70.0",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^4.3.4",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   }
 }
