@@ -55,7 +55,7 @@
     "pyright": "1.1.414",
     "squawk-cli": "2.72.0",
     "tailwindcss": "^4.3.5",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vitest": "^5.1.0"
   }
 }
