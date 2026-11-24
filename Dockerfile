@@ -1,4 +1,4 @@
-FROM node:26.11.1-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS base
+FROM node:26.13.1-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS base
 
 # Node.js 25 and newer ship without corepack: install the pnpm that package.json's packageManager names, so that field
 # stays the one place the version is set. pnpm's own install script links its native binary in place of a
